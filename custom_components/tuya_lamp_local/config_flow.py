@@ -10,6 +10,7 @@ import os
 import re
 import socket
 from typing import Any
+import urllib.parse
 import urllib.request
 
 from homeassistant import config_entries
@@ -166,9 +167,8 @@ def _extract_device_ip(item: dict[str, Any]) -> str:
     return ""
 
 
-def _get_candidate_subnets() -> list[str]:
-    """Get list of candidate /24 subnet prefixes to scan."""
-    subnets: list[str] = []
+def _get_single_local_subnet() -> str | None:
+    """Get the primary local LAN subnet prefix (e.g. '192.168.178')."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
@@ -176,20 +176,29 @@ def _get_candidate_subnets() -> list[str]:
         s.close()
         parts = local_ip.split(".")
         if len(parts) == 4 and _is_private_ip(local_ip):
-            primary = ".".join(parts[:3])
-            subnets.append(primary)
+            if not local_ip.startswith("172.") and not local_ip.startswith("127."):
+                return ".".join(parts[:3])
     except Exception:
         pass
 
-    # Include common home subnets if needed (e.g. docker bridge setups)
-    if not subnets or subnets[0].startswith("172.") or subnets[0].startswith("127."):
-        for common in ["192.168.178", "192.168.1", "192.168.0", "192.168.2", "10.0.0"]:
-            if common not in subnets:
-                subnets.append(common)
-    return subnets
+    # Check Linux/HOAS default route
+    if os.path.exists("/proc/net/route"):
+        try:
+            with open("/proc/net/route", "r") as f:
+                for line in f.readlines()[1:]:
+                    fields = line.strip().split()
+                    if len(fields) >= 3 and fields[1] == "00000000":
+                        gw_hex = fields[2]
+                        gw_ip = socket.inet_ntoa(bytes.fromhex(gw_hex)[::-1])
+                        if _is_private_ip(gw_ip) and not gw_ip.startswith("172."):
+                            return ".".join(gw_ip.split(".")[:3])
+        except Exception:
+            pass
+
+    return "192.168.178"
 
 
-async def _async_scan_subnet_tuya_ports(prefix: str, timeout: float = 0.35) -> list[str]:
+async def _async_scan_subnet_tuya_ports(prefix: str, timeout: float = 0.25) -> list[str]:
     """Scan local /24 subnet for devices with open TCP port 6668 (Tuya port)."""
     async def _check_ip(ip: str) -> str | None:
         try:
@@ -206,71 +215,70 @@ async def _async_scan_subnet_tuya_ports(prefix: str, timeout: float = 0.35) -> l
     return [ip for ip in results if ip]
 
 
-def _sync_probe_tuya_device(ip: str, dev_id: str, local_key: str) -> bool:
-    """Synchronously test if this IP matches dev_id and local_key."""
-    for version in [3.3, 3.4, 3.5, 3.1]:
-        try:
-            device = tinytuya.BulbDevice(
-                dev_id=dev_id,
-                address=ip,
-                local_key=local_key,
-                version=version,
-            )
-            device.set_socketTimeout(0.8)
-            status = device.status()
-            if isinstance(status, dict) and "dps" in status:
-                return True
-        except Exception:
-            continue
-    return False
-
-
-async def _async_auto_discover_device_ip(
+async def _async_resolve_devices_ips(
     hass,
-    dev_id: str,
-    local_key: str,
-    lan_mapping: dict[str, dict[str, Any]] | None = None,
-) -> str:
-    """Automatically find the local IP of a Tuya device using UDP scan, subnet probe and matching."""
-    # 1. Check UDP broadcast scan mapping
-    if lan_mapping and dev_id in lan_mapping:
-        ip = lan_mapping[dev_id].get("ip")
-        if ip and _is_private_ip(ip):
-            return ip.strip()
+    devices: list[dict[str, Any]],
+    lan_mapping: dict[str, dict[str, Any]],
+    user_override_host: str = "",
+) -> None:
+    """Resolve local LAN IPs for parsed devices quickly and safely."""
+    # 1. User override if provided
+    if user_override_host and _is_private_ip(user_override_host):
+        for dev in devices:
+            if not dev.get("ip"):
+                dev["ip"] = user_override_host
 
-    # 2. Fast TCP port 6668 scan across candidate subnets
-    subnets = _get_candidate_subnets()
-    candidates: list[str] = []
-    for prefix in subnets:
-        found = await _async_scan_subnet_tuya_ports(prefix=prefix, timeout=0.35)
-        candidates.extend(found)
-        if candidates:
-            break
+    # 2. Map from UDP broadcast scan
+    for dev in devices:
+        dev_id = dev["id"]
+        if dev_id in lan_mapping:
+            lan_ip = lan_mapping[dev_id].get("ip")
+            if lan_ip and _is_private_ip(lan_ip):
+                dev["ip"] = lan_ip
 
+    # 3. Check if any device still needs an IP
+    needing_ip = [d for d in devices if not d.get("ip") or not _is_private_ip(d.get("ip"))]
+    if not needing_ip:
+        return
+
+    # 4. Scan subnet ONCE on port 6668 (takes ~0.25s)
+    prefix = _get_single_local_subnet()
+    if not prefix:
+        return
+
+    candidates = await _async_scan_subnet_tuya_ports(prefix=prefix, timeout=0.25)
     if not candidates:
-        return ""
+        return
 
-    if len(candidates) == 1:
-        return candidates[0]
+    # If only 1 device needs an IP and only 1 candidate was found:
+    if len(needing_ip) == 1 and len(candidates) == 1:
+        needing_ip[0]["ip"] = candidates[0]
+        return
 
-    # Multiple devices with port 6668 open: probe each in parallel to find the one matching dev_id & key
-    def _find_match() -> str | None:
-        def _test(cand_ip: str) -> str | None:
-            if _sync_probe_tuya_device(cand_ip, dev_id, local_key):
-                return cand_ip
-            return None
+    # Multiple candidates: probe quickly in executor with 0.3s timeout
+    def _run_matches() -> dict[str, str]:
+        results: dict[str, str] = {}
+        for dev in needing_ip:
+            dev_id = dev["id"]
+            key = dev["key"]
+            for cand_ip in candidates:
+                try:
+                    d = tinytuya.BulbDevice(dev_id=dev_id, address=cand_ip, local_key=key, version=3.3)
+                    d.set_socketTimeout(0.3)
+                    st = d.status()
+                    if isinstance(st, dict) and "dps" in st:
+                        results[dev_id] = cand_ip
+                        break
+                except Exception:
+                    continue
+        return results
 
-        with ThreadPoolExecutor(max_workers=min(len(candidates), 8)) as ex:
-            for res in ex.map(_test, candidates):
-                if res:
-                    return res
-        return None
-
-    matched = await hass.async_add_executor_job(_find_match)
-    if matched:
-        return matched
-
-    return candidates[0]
+    matches = await hass.async_add_executor_job(_run_matches)
+    for dev in needing_ip:
+        if dev["id"] in matches:
+            dev["ip"] = matches[dev["id"]]
+        elif len(candidates) == 1:
+            dev["ip"] = candidates[0]
 
 
 def _validate_connection(data: dict[str, Any]) -> tuple[bool, str | None, dict[str, Any] | None]:
@@ -431,42 +439,39 @@ def _fetch_from_tuya_local_key_server(server_url: str) -> list[dict[str, Any]]:
     if not server_url.startswith("http://") and not server_url.startswith("https://"):
         server_url = f"http://{server_url}"
 
-    # Build candidates: user URL plus common Home Assistant Docker add-on hostnames
-    candidates = [server_url]
-    if "localhost" in server_url or "127.0.0.1" in server_url:
-        candidates.extend(
-            [
-                server_url.replace("localhost", "127.0.0.1"),
-                server_url.replace("localhost", "tuya-local-key").replace("127.0.0.1", "tuya-local-key"),
-                server_url.replace("localhost", "local-tuya-local-key").replace("127.0.0.1", "local-tuya-local-key"),
-                server_url.replace("localhost", "homeassistant").replace("127.0.0.1", "homeassistant"),
-            ]
-        )
+    # Fast socket pre-check (1.0s timeout) to prevent 30s+ browser freeze on closed ports
+    parsed_url = urllib.parse.urlparse(server_url)
+    host = parsed_url.hostname or "localhost"
+    port = parsed_url.port or (443 if parsed_url.scheme == "https" else 80)
+    try:
+        with socket.create_connection((host, port), timeout=1.0):
+            pass
+    except Exception as err:
+        raise Exception(f"Port {port} auf {host} nicht erreichbar ({err}). Läuft das Add-on und ist der Port freigegeben?")
 
+    # Port is open! Check standard endpoints
+    endpoints = [
+        f"{server_url}/api/devices",
+        f"{server_url}/devices",
+        server_url,
+    ]
     last_error = None
-    for base in candidates:
-        endpoints = [
-            f"{base}/api/devices",
-            f"{base}/devices",
-            f"{base}/api/v1/devices",
-            base,
-        ]
-        for url in endpoints:
-            try:
-                req = urllib.request.Request(
-                    url,
-                    headers={"Accept": "application/json", "User-Agent": "HomeAssistant-TuyaLamp"},
-                )
-                with urllib.request.urlopen(req, timeout=3) as response:
-                    content = response.read().decode("utf-8")
-                    parsed = _parse_devices_json(content)
-                    if parsed:
-                        return parsed
-            except Exception as err:
-                last_error = err
-                continue
+    for url in endpoints:
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"Accept": "application/json", "User-Agent": "HomeAssistant-TuyaLamp"},
+            )
+            with urllib.request.urlopen(req, timeout=1.5) as response:
+                content = response.read().decode("utf-8")
+                parsed = _parse_devices_json(content)
+                if parsed:
+                    return parsed
+        except Exception as err:
+            last_error = err
+            continue
 
-    raise Exception(f"Verbindung zu {server_url} fehlgeschlagen: {last_error}")
+    raise Exception(f"Konnte keine Gerätedaten von {server_url} abrufen: {last_error}")
 
 
 class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -533,24 +538,14 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
 
                 lan_mapping = await self.hass.async_add_executor_job(_sync_scan_lan)
+                await _async_resolve_devices_ips(self.hass, parsed_list, lan_mapping)
+
                 self._discovered_devices = {}
                 for dev in parsed_list:
                     dev_id = dev["id"]
-                    dev_key = dev["key"]
-
-                    if not dev["ip"] or not _is_private_ip(dev["ip"]):
-                        discovered_ip = await _async_auto_discover_device_ip(
-                            self.hass, dev_id, dev_key, lan_mapping
-                        )
-                        if discovered_ip:
-                            dev["ip"] = discovered_ip
-                    elif dev_id in lan_mapping and _is_private_ip(lan_mapping[dev_id].get("ip")):
-                        dev["ip"] = lan_mapping[dev_id]["ip"]
-
                     lan_info = lan_mapping.get(dev_id, {})
                     if dev["version"] == PROTOCOL_AUTO and lan_info.get("version"):
                         dev["version"] = lan_info["version"]
-
                     self._discovered_devices[dev_id] = dev
 
                 if not self._discovered_devices:
@@ -590,30 +585,16 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     parsed_list = _parse_devices_json(raw_json)
                     lan_mapping = await self.hass.async_add_executor_job(_sync_scan_lan)
+                    await _async_resolve_devices_ips(
+                        self.hass, parsed_list, lan_mapping, user_override_host=user_host
+                    )
 
                     self._discovered_devices = {}
                     for dev in parsed_list:
                         dev_id = dev["id"]
-                        dev_key = dev["key"]
-
-                        # User explicitly entered IP in form
-                        if user_host and _is_private_ip(user_host) and not dev["ip"]:
-                            dev["ip"] = user_host
-
-                        # If still no valid private IP, auto-discover on local network
-                        if not dev["ip"] or not _is_private_ip(dev["ip"]):
-                            discovered_ip = await _async_auto_discover_device_ip(
-                                self.hass, dev_id, dev_key, lan_mapping
-                            )
-                            if discovered_ip:
-                                dev["ip"] = discovered_ip
-                        elif dev_id in lan_mapping and _is_private_ip(lan_mapping[dev_id].get("ip")):
-                            dev["ip"] = lan_mapping[dev_id]["ip"]
-
                         lan_info = lan_mapping.get(dev_id, {})
                         if dev["version"] == PROTOCOL_AUTO and lan_info.get("version"):
                             dev["version"] = lan_info["version"]
-
                         self._discovered_devices[dev_id] = dev
 
                     if not self._discovered_devices:
@@ -659,38 +640,36 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # 2. Scan local LAN to match local IPs
                 lan_mapping = await self.hass.async_add_executor_job(_sync_scan_lan)
 
-                self._discovered_devices = {}
+                parsed_list: list[dict[str, Any]] = []
                 for dev in cloud_devices:
                     dev_id = str(dev.get("id") or dev.get("gwId") or "")
                     local_key = str(dev.get("local_key") or dev.get("key") or "")
                     if not dev_id or not local_key:
                         continue
-
                     name = dev.get("name") or f"Tuya Lamp {dev_id[-6:]}"
-                    lan_info = lan_mapping.get(dev_id, {})
-                    extracted_ip = _extract_device_ip(dev)
-
-                    ip = extracted_ip if extracted_ip and _is_private_ip(extracted_ip) else ""
-                    if not ip:
-                        discovered_ip = await _async_auto_discover_device_ip(
-                            self.hass, dev_id, local_key, lan_mapping
-                        )
-                        if discovered_ip:
-                            ip = discovered_ip
-                    elif dev_id in lan_mapping and _is_private_ip(lan_mapping[dev_id].get("ip")):
-                        ip = lan_mapping[dev_id]["ip"]
-
-                    vers = lan_info.get("version") or dev.get("version", PROTOCOL_AUTO)
+                    ip = _extract_device_ip(dev)
+                    vers = dev.get("version", PROTOCOL_AUTO)
                     category = dev.get("category", "")
+                    parsed_list.append(
+                        {
+                            "name": name,
+                            "id": dev_id,
+                            "key": local_key,
+                            "ip": ip,
+                            "version": vers,
+                            "category": category,
+                        }
+                    )
 
-                    self._discovered_devices[dev_id] = {
-                        "name": name,
-                        "id": dev_id,
-                        "key": local_key,
-                        "ip": ip,
-                        "version": vers,
-                        "category": category,
-                    }
+                await _async_resolve_devices_ips(self.hass, parsed_list, lan_mapping)
+
+                self._discovered_devices = {}
+                for dev in parsed_list:
+                    dev_id = dev["id"]
+                    lan_info = lan_mapping.get(dev_id, {})
+                    if dev["version"] == PROTOCOL_AUTO and lan_info.get("version"):
+                        dev["version"] = lan_info["version"]
+                    self._discovered_devices[dev_id] = dev
 
                 if not self._discovered_devices:
                     errors["base"] = "no_devices_found"
