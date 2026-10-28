@@ -1,6 +1,7 @@
 """Config flow and Options flow for Tuya Local Lamp integration."""
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
@@ -67,6 +68,72 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _is_private_ip(ip_str: str | None) -> bool:
+    """Check if the string is a valid private/local IPv4 or IPv6 address."""
+    if not ip_str or not isinstance(ip_str, str):
+        return False
+    clean_ip = ip_str.strip()
+    try:
+        ip_obj = ipaddress.ip_address(clean_ip)
+        return ip_obj.is_private or ip_obj.is_link_local
+    except ValueError:
+        return False
+
+
+def _extract_device_ip(item: dict[str, Any]) -> str:
+    """Extract local IP address from Tuya device data, strictly preferring private LAN IPs.
+
+    Tuya cloud and export tools often report the router's public WAN IP in 'ip',
+    while the actual internal LAN IP is stored in 'local_ip', 'localIp', 'lan_ip', etc.
+    """
+    # 1. First priority: explicit local / LAN IP keys
+    local_keys = [
+        "local_ip",
+        "localIp",
+        "lan_ip",
+        "lanIp",
+        "private_ip",
+        "privateIp",
+        "lan",
+    ]
+    for key in local_keys:
+        val = item.get(key)
+        if isinstance(val, str) and _is_private_ip(val):
+            return val.strip()
+
+    # 2. Second priority: generic 'ip', 'address', 'host' keys, ONLY IF private IP
+    generic_keys = ["ip", "address", "host"]
+    for key in generic_keys:
+        val = item.get(key)
+        if isinstance(val, str) and _is_private_ip(val):
+            return val.strip()
+
+    # 3. Third priority: non-empty local key field even if not standard IPv4 (e.g. .local hostname)
+    for key in local_keys:
+        val = item.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+
+    # 4. Filter out public WAN IPs from generic keys
+    for key in generic_keys:
+        val = item.get(key)
+        if isinstance(val, str) and val.strip():
+            try:
+                ip_obj = ipaddress.ip_address(val.strip())
+                if not ip_obj.is_private and not ip_obj.is_link_local:
+                    _LOGGER.info(
+                        "Ignoring public WAN IP %s for device %s; waiting for local LAN IP",
+                        val,
+                        item.get("id") or item.get("gwId"),
+                    )
+                    continue
+            except ValueError:
+                # Hostname or mDNS name (e.g. 'tuya-lamp.local')
+                return val.strip()
+
+    return ""
+
+
 def _validate_connection(data: dict[str, Any]) -> tuple[bool, str | None, dict[str, Any] | None]:
     """Test device connectivity and credentials in executor."""
     host = data.get(CONF_HOST, "").strip()
@@ -76,6 +143,19 @@ def _validate_connection(data: dict[str, Any]) -> tuple[bool, str | None, dict[s
 
     if not host or not device_id or not local_key:
         return False, None, None
+
+    if host and not _is_private_ip(host):
+        try:
+            ip_obj = ipaddress.ip_address(host)
+            if not ip_obj.is_private and not ip_obj.is_link_local:
+                _LOGGER.warning(
+                    "Attempting connection to public WAN IP %s for device %s. "
+                    "Tuya local TCP connections (port 6668) typically require the device's local private LAN IP (e.g. 192.168.x.x)",
+                    host,
+                    device_id,
+                )
+        except ValueError:
+            pass
 
     versions_to_try = [3.3, 3.4, 3.5, 3.1] if protocol_str == PROTOCOL_AUTO else [float(protocol_str)]
 
@@ -189,7 +269,7 @@ def _parse_devices_json(raw_text: str, file_path: str = "") -> list[dict[str, An
             or item.get("productName")
             or f"Tuya Lamp {str(dev_id)[-6:]}"
         )
-        ip = item.get("ip") or item.get("address") or item.get("local_ip", "")
+        ip = _extract_device_ip(item)
         version = str(item.get("version") or item.get("protocol_version") or PROTOCOL_AUTO)
         category = item.get("category", "")
 
@@ -318,8 +398,12 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 for dev in parsed_list:
                     dev_id = dev["id"]
                     lan_info = lan_mapping.get(dev_id, {})
-                    if not dev["ip"] and lan_info.get("ip"):
-                        dev["ip"] = lan_info["ip"]
+                    lan_ip = lan_info.get("ip")
+                    if lan_ip and _is_private_ip(lan_ip):
+                        dev["ip"] = lan_ip
+                    elif not _is_private_ip(dev.get("ip")) and lan_ip:
+                        dev["ip"] = lan_ip
+
                     if dev["version"] == PROTOCOL_AUTO and lan_info.get("version"):
                         dev["version"] = lan_info["version"]
 
@@ -365,8 +449,12 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     for dev in parsed_list:
                         dev_id = dev["id"]
                         lan_info = lan_mapping.get(dev_id, {})
-                        if not dev["ip"] and lan_info.get("ip"):
-                            dev["ip"] = lan_info["ip"]
+                        lan_ip = lan_info.get("ip")
+                        if lan_ip and _is_private_ip(lan_ip):
+                            dev["ip"] = lan_ip
+                        elif not _is_private_ip(dev.get("ip")) and lan_ip:
+                            dev["ip"] = lan_ip
+
                         if dev["version"] == PROTOCOL_AUTO and lan_info.get("version"):
                             dev["version"] = lan_info["version"]
 
@@ -423,7 +511,16 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                     name = dev.get("name") or f"Tuya Lamp {dev_id[-6:]}"
                     lan_info = lan_mapping.get(dev_id, {})
-                    ip = lan_info.get("ip") or dev.get("ip", "")
+                    lan_ip = lan_info.get("ip")
+                    extracted_ip = _extract_device_ip(dev)
+
+                    if lan_ip and _is_private_ip(lan_ip):
+                        ip = lan_ip
+                    elif extracted_ip:
+                        ip = extracted_ip
+                    else:
+                        ip = ""
+
                     vers = lan_info.get("version") or dev.get("version", PROTOCOL_AUTO)
                     category = dev.get("category", "")
 
