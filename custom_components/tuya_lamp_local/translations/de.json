@@ -19,7 +19,8 @@
         "title": "Raw JSON aus Tuya Local Key einfügen",
         "description": "Öffne dein Tuya Local Key Add-on, klicke bei deiner Lampe auf 'Raw JSON' -> 'Copy' und füge den Text hier ein.",
         "data": {
-          "json_data": "Raw JSON Text (hier einfügen)"
+          "json_data": "Raw JSON Text (hier einfügen)",
+          "host": "Lokale IP-Adresse (Optional - wird sonst automatisch im WLAN gesucht)"
         }
       },
       "cloud": {

@@ -34,7 +34,8 @@ Wenn das Add-on *Tuya Local Key* auf deinem Home Assistant Server läuft:
 Falls du keinen lokalen Port nutzt:
 1. Öffne das *Tuya Local Key* Add-on und klicke bei deiner Lampe auf **Raw JSON** -> **Copy**.
 2. Wähle **Raw JSON einfügen** und füge den Text in das Textfeld ein.
-3. Klicke auf **Absenden** – alle Lampen werden sofort erkannt und zur Auswahl aufgelistet!
+3. *(Optional)* Falls im Raw JSON nur die öffentliche Cloud-IP steht, kannst du deine lokale IP direkt im optionalen Feld eingeben. Lässt du es frei, scannt die Integration dein WLAN automatisch in unter einer Sekunde nach der passenden Lampe!
+4. Klicke auf **Absenden** – die Lampe wird mit ihrer lokalen IP vorausgefüllt!
 
 ### 3. Methode: Tuya IoT Developer Cloud (iot.tuya.com)
 Direkte Abfrage über das Tuya Entwicklerkonto (Region, Client ID & Secret).

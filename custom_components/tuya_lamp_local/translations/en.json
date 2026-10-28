@@ -19,7 +19,8 @@
         "title": "Paste Raw JSON from Tuya Local Key",
         "description": "Open your Tuya Local Key Add-on, copy the Raw JSON of your device(s), and paste it here.",
         "data": {
-          "json_data": "Raw JSON Data"
+          "json_data": "Raw JSON Data",
+          "host": "Local IP Address (Optional - auto-detected on Wi-Fi if left blank)"
         }
       },
       "cloud": {
