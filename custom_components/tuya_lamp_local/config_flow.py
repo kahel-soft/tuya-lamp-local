@@ -1027,9 +1027,20 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_abort(reason="cannot_connect")
 
         if user_input is not None:
+            new_opts = dict(self.config_entry.options)
+            if not coordinator.is_switch and coordinator.has_aux_light:
+                new_opts[CONF_DP_AUX_POWER] = coordinator.dp_aux_power
+                if coordinator.dp_aux_brightness:
+                    new_opts[CONF_DP_AUX_BRIGHTNESS] = coordinator.dp_aux_brightness
+                if coordinator.dp_aux_color:
+                    new_opts[CONF_DP_AUX_COLOR] = coordinator.dp_aux_color
+                if coordinator.dp_aux_mode:
+                    new_opts[CONF_DP_AUX_MODE] = coordinator.dp_aux_mode
+                if coordinator.dp_master_power:
+                    new_opts[CONF_DP_POWER] = coordinator.dp_power
             # Force reload of entry which re-initializes platforms and adds newly detected entities
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-            return self.async_create_entry(title="", data=self.config_entry.options)
+            return self.async_create_entry(title="", data=new_opts)
 
         try:
             status_data = await self.hass.async_add_executor_job(coordinator._sync_fetch_status)
@@ -1154,14 +1165,26 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
         else:
             formatted_dps = "Keine Live-Daten verfügbar (Lampe eingeschaltet?)"
 
-        current_power = opts.get(CONF_DP_POWER, data.get(CONF_DP_POWER, "20"))
-        current_mode = opts.get(CONF_DP_MODE, data.get(CONF_DP_MODE, "21"))
+        current_power = opts.get(
+            CONF_DP_POWER,
+            data.get(CONF_DP_POWER, coordinator.dp_power if coordinator else "20"),
+        )
+        current_mode = opts.get(
+            CONF_DP_MODE,
+            data.get(CONF_DP_MODE, coordinator.dp_mode if coordinator else "21"),
+        )
 
-        current_bright = opts.get(CONF_DP_BRIGHTNESS, data.get(CONF_DP_BRIGHTNESS, "22"))
+        current_bright = opts.get(
+            CONF_DP_BRIGHTNESS,
+            data.get(CONF_DP_BRIGHTNESS, coordinator.dp_brightness if coordinator else "22"),
+        )
         current_bright_min = opts.get(CONF_BRIGHTNESS_MIN, data.get(CONF_BRIGHTNESS_MIN, DEFAULT_BRIGHTNESS_MIN))
         current_bright_max = opts.get(CONF_BRIGHTNESS_MAX, data.get(CONF_BRIGHTNESS_MAX, DEFAULT_BRIGHTNESS_MAX))
 
-        current_temp = opts.get(CONF_DP_COLOR_TEMP, data.get(CONF_DP_COLOR_TEMP, "23"))
+        current_temp = opts.get(
+            CONF_DP_COLOR_TEMP,
+            data.get(CONF_DP_COLOR_TEMP, coordinator.dp_color_temp if coordinator else "23"),
+        )
         current_temp_min = opts.get(CONF_COLOR_TEMP_MIN, data.get(CONF_COLOR_TEMP_MIN, DEFAULT_COLOR_TEMP_MIN))
         current_temp_max = opts.get(CONF_COLOR_TEMP_MAX, data.get(CONF_COLOR_TEMP_MAX, DEFAULT_COLOR_TEMP_MAX))
         current_temp_rev = opts.get(CONF_COLOR_TEMP_REVERSE, data.get(CONF_COLOR_TEMP_REVERSE, False))
@@ -1169,24 +1192,39 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
         current_min_k = opts.get(CONF_MIN_KELVIN, data.get(CONF_MIN_KELVIN, DEFAULT_MIN_KELVIN))
         current_max_k = opts.get(CONF_MAX_KELVIN, data.get(CONF_MAX_KELVIN, DEFAULT_MAX_KELVIN))
 
-        current_color = opts.get(CONF_DP_COLOR, data.get(CONF_DP_COLOR, "24"))
+        current_color = opts.get(
+            CONF_DP_COLOR,
+            data.get(CONF_DP_COLOR, coordinator.dp_color if coordinator else "24"),
+        )
         current_color_type = opts.get(CONF_COLOR_TYPE, data.get(CONF_COLOR_TYPE, COLOR_TYPE_HSV_HEX_12))
 
         current_aux_power = opts.get(
             CONF_DP_AUX_POWER,
-            data.get(CONF_DP_AUX_POWER, "102" if coordinator and coordinator.has_aux_light else ""),
+            data.get(
+                CONF_DP_AUX_POWER,
+                coordinator.dp_aux_power if coordinator and coordinator.has_aux_light else ("102" if "102" in live_dps else ""),
+            ),
         )
         current_aux_bright = opts.get(
             CONF_DP_AUX_BRIGHTNESS,
-            data.get(CONF_DP_AUX_BRIGHTNESS, "103" if coordinator and coordinator.has_aux_light else ""),
+            data.get(
+                CONF_DP_AUX_BRIGHTNESS,
+                coordinator.dp_aux_brightness if coordinator and coordinator.has_aux_light else ("103" if "103" in live_dps else ""),
+            ),
         )
         current_aux_color = opts.get(
             CONF_DP_AUX_COLOR,
-            data.get(CONF_DP_AUX_COLOR, "105" if coordinator and coordinator.has_aux_light else ""),
+            data.get(
+                CONF_DP_AUX_COLOR,
+                coordinator.dp_aux_color if coordinator and coordinator.has_aux_light else ("105" if "105" in live_dps else ""),
+            ),
         )
         current_aux_mode = opts.get(
             CONF_DP_AUX_MODE,
-            data.get(CONF_DP_AUX_MODE, "106" if coordinator and coordinator.has_aux_light else ""),
+            data.get(
+                CONF_DP_AUX_MODE,
+                coordinator.dp_aux_mode if coordinator and coordinator.has_aux_light else ("106" if "106" in live_dps else ""),
+            ),
         )
 
         current_dev_type = opts.get(CONF_DEVICE_TYPE, data.get(CONF_DEVICE_TYPE, DEVICE_TYPE_AUTO))

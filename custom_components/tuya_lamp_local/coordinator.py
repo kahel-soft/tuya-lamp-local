@@ -272,12 +272,22 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             error_msg = data.get("Error", "No DPS data returned")
             raise UpdateFailed(f"Device communication failed ({self.host}): {error_msg}")
 
+        # Normalize DPS dictionary keys to strings
+        if isinstance(data.get("dps"), dict):
+            data["dps"] = {str(k): v for k, v in data["dps"].items()}
+
         return data
 
     def _detect_datapoint_layout(self, dps: dict[str, Any]) -> None:
         """Inspect DPS dictionary to identify device type (Light vs Switch/Socket) and layout."""
+        # Ensure all DP keys are strings
+        dps = {str(k): v for k, v in dps.items()}
+
         # 1. Determine device classification (Light vs Switch/Socket)
-        if self.configured_device_type == DEVICE_TYPE_SWITCH:
+        # Any device with aux light (DP 102) or dual light controls (101 & 102) is definitively a light fixture!
+        if (DP_MAIN_POWER in dps and DP_AUX_POWER in dps) or DP_AUX_POWER in dps or self.custom_dp_aux_power:
+            self.device_type = DEVICE_TYPE_LIGHT
+        elif self.configured_device_type == DEVICE_TYPE_SWITCH:
             self.device_type = DEVICE_TYPE_SWITCH
         elif self.configured_device_type == DEVICE_TYPE_LIGHT:
             self.device_type = DEVICE_TYPE_LIGHT
@@ -350,10 +360,16 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         # 2. Main light switch & Master hardware switch (for Light devices)
-        if self.custom_dp_power:
+        is_dual_fixture = (
+            (DP_MAIN_POWER in dps and DP_AUX_POWER in dps)
+            or (DP_AUX_POWER in dps)
+            or bool(self.custom_dp_aux_power)
+        )
+
+        if self.custom_dp_power and self.custom_dp_power not in (DP_MODERN_POWER, DP_MAIN_POWER):
             self.dp_power = self.custom_dp_power
             self.dp_master_power = None
-        elif DP_MAIN_POWER in dps and DP_AUX_POWER in dps:
+        elif is_dual_fixture and DP_MAIN_POWER in dps:
             # Dual-source fixture: DP 101 is main light switch, DP 20 is master hardware switch
             self.dp_power = DP_MAIN_POWER
             self.dp_master_power = DP_MODERN_POWER if DP_MODERN_POWER in dps else None
@@ -482,16 +498,17 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_send_dps(self, payload: dict[str, Any]) -> None:
         """Send DPS changes to device and update internal state optimistically."""
+        norm_payload = {str(k): v for k, v in payload.items()}
         async with self._lock:
             try:
-                await self.hass.async_add_executor_job(self._sync_send_dps, payload)
+                await self.hass.async_add_executor_job(self._sync_send_dps, norm_payload)
             except Exception as err:
                 _LOGGER.error("Failed to send command to Tuya lamp (%s): %s", self.host, err)
                 raise
 
             if self.data and "dps" in self.data:
                 updated_dps = dict(self.data["dps"])
-                updated_dps.update(payload)
+                updated_dps.update(norm_payload)
                 self.data["dps"] = updated_dps
                 self.async_set_updated_data(self.data)
 

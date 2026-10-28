@@ -120,7 +120,8 @@ class TuyaLocalSwitch(CoordinatorEntity[TuyaLampCoordinator], SwitchEntity):
     def is_on(self) -> bool:
         """Return True if the socket/switch is on."""
         dps = self.coordinator.data.get("dps", {}) if self.coordinator.data else {}
-        return bool(dps.get(self.dp_id, False))
+        val = dps.get(self.dp_id, dps.get(int(self.dp_id) if str(self.dp_id).isdigit() else None, False))
+        return bool(val)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the socket/switch on."""

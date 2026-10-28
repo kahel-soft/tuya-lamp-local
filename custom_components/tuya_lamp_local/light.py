@@ -134,12 +134,22 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
             return self.coordinator.data["dps"]
         return {}
 
+    def _get_dp(self, dp_id: str | None, default: Any = None) -> Any:
+        """Safely fetch DP value supporting string or int key."""
+        if not dp_id or not self._dps:
+            return default
+        if dp_id in self._dps:
+            return self._dps[dp_id]
+        if str(dp_id).isdigit() and int(dp_id) in self._dps:
+            return self._dps[int(dp_id)]
+        return default
+
     @property
     def is_on(self) -> bool:
         """Return True if the main light is on."""
-        power_on = bool(self._dps.get(self.coordinator.dp_power, False))
+        power_on = bool(self._get_dp(self.coordinator.dp_power, False))
         if self.coordinator.dp_master_power:
-            master_on = bool(self._dps.get(self.coordinator.dp_master_power, True))
+            master_on = bool(self._get_dp(self.coordinator.dp_master_power, True))
             return power_on and master_on
         return power_on
 
@@ -168,16 +178,24 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
     @property
     def color_mode(self) -> ColorMode | None:
         """Return current operational color mode."""
-        current_tuya_mode = self._dps.get(self.coordinator.dp_mode, MODE_WHITE)
+        supported = self.supported_color_modes
+        if not supported:
+            return ColorMode.ONOFF
 
-        if current_tuya_mode == MODE_COLOUR and self.coordinator.has_color:
-            if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
+        current_tuya_mode = self._get_dp(self.coordinator.dp_mode, MODE_WHITE)
+
+        if current_tuya_mode == MODE_COLOUR:
+            if ColorMode.RGB in supported:
                 return ColorMode.RGB
-            return ColorMode.HS
-
-        if self.coordinator.has_color_temp:
+            if ColorMode.HS in supported:
+                return ColorMode.HS
+        if ColorMode.COLOR_TEMP in supported:
             return ColorMode.COLOR_TEMP
-        if self.coordinator.has_brightness:
+        if ColorMode.HS in supported:
+            return ColorMode.HS
+        if ColorMode.RGB in supported:
+            return ColorMode.RGB
+        if ColorMode.BRIGHTNESS in supported:
             return ColorMode.BRIGHTNESS
         return ColorMode.ONOFF
 
@@ -187,18 +205,18 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if not self.coordinator.has_brightness:
             return None
 
-        current_tuya_mode = self._dps.get(self.coordinator.dp_mode, MODE_WHITE)
+        current_tuya_mode = self._get_dp(self.coordinator.dp_mode, MODE_WHITE)
 
         # In color mode with HSV hex, brightness is encoded in the V component.
         # Also use HSV value if no separate white brightness DP is available.
-        if (current_tuya_mode == MODE_COLOUR or not self._dps.get(self.coordinator.dp_brightness)) and self.coordinator.has_color and self.coordinator.color_type != COLOR_TYPE_RGB_HEX_6:
-            hex_data = str(self._dps.get(self.coordinator.dp_color, ""))
+        if (current_tuya_mode == MODE_COLOUR or not self._get_dp(self.coordinator.dp_brightness)) and self.coordinator.has_color and self.coordinator.color_type != COLOR_TYPE_RGB_HEX_6:
+            hex_data = str(self._get_dp(self.coordinator.dp_color, ""))
             parsed = tuya_hex_to_ha_hs(hex_data)
             if parsed is not None:
                 _, bright_ha = parsed
                 return bright_ha
 
-        val = self._dps.get(self.coordinator.dp_brightness)
+        val = self._get_dp(self.coordinator.dp_brightness)
         if val is None:
             return None
         return tuya_brightness_to_ha(
@@ -213,7 +231,7 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if not self.coordinator.has_color_temp:
             return None
 
-        val = self._dps.get(self.coordinator.dp_color_temp)
+        val = self._get_dp(self.coordinator.dp_color_temp)
         if val is None:
             return None
         return tuya_to_ha_kelvin(
@@ -231,7 +249,7 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if not self.coordinator.has_color or self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
             return None
 
-        hex_data = str(self._dps.get(self.coordinator.dp_color, ""))
+        hex_data = str(self._get_dp(self.coordinator.dp_color, ""))
         parsed = tuya_hex_to_ha_hs(hex_data)
         if parsed is not None:
             hs, _ = parsed
@@ -244,7 +262,7 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if not self.coordinator.has_color or self.coordinator.color_type != COLOR_TYPE_RGB_HEX_6:
             return None
 
-        hex_data = str(self._dps.get(self.coordinator.dp_color, ""))
+        hex_data = str(self._get_dp(self.coordinator.dp_color, ""))
         return tuya_hex_to_ha_rgb(hex_data)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -298,10 +316,11 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         # Handle Brightness only
         elif ATTR_BRIGHTNESS in kwargs:
             bright = kwargs[ATTR_BRIGHTNESS]
-            current_tuya_mode = self._dps.get(self.coordinator.dp_mode, MODE_WHITE)
+            current_tuya_mode = self._get_dp(self.coordinator.dp_mode, MODE_WHITE)
 
-            if current_tuya_mode == MODE_COLOUR and self.coordinator.has_color and self.hs_color and self.coordinator.color_type != COLOR_TYPE_RGB_HEX_6:
-                hex_str = ha_hs_to_tuya_hex(self.hs_color, brightness_ha=bright)
+            if current_tuya_mode == MODE_COLOUR and self.coordinator.has_color and self.coordinator.color_type != COLOR_TYPE_RGB_HEX_6:
+                active_hs = self.hs_color or (0.0, 0.0)
+                hex_str = ha_hs_to_tuya_hex(active_hs, brightness_ha=bright)
                 payload[self.coordinator.dp_color] = hex_str
             elif self.coordinator.has_brightness:
                 payload[self.coordinator.dp_brightness] = ha_brightness_to_tuya(
@@ -316,7 +335,12 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the main lamp off."""
-        await self.coordinator.async_send_dps({self.coordinator.dp_power: False})
+        payload: dict[str, Any] = {self.coordinator.dp_power: False}
+        if self.coordinator.dp_master_power and self.coordinator.has_aux_light:
+            aux_is_on = bool(self._get_dp(self.coordinator.dp_aux_power, False))
+            if not aux_is_on:
+                payload[self.coordinator.dp_master_power] = False
+        await self.coordinator.async_send_dps(payload)
 
 
 class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
@@ -350,12 +374,22 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
             return self.coordinator.data["dps"]
         return {}
 
+    def _get_dp(self, dp_id: str | None, default: Any = None) -> Any:
+        """Safely fetch DP value supporting string or int key."""
+        if not dp_id or not self._dps:
+            return default
+        if dp_id in self._dps:
+            return self._dps[dp_id]
+        if str(dp_id).isdigit() and int(dp_id) in self._dps:
+            return self._dps[int(dp_id)]
+        return default
+
     @property
     def is_on(self) -> bool:
         """Return True if the auxiliary light is on."""
-        aux_on = bool(self._dps.get(self.coordinator.dp_aux_power, False))
+        aux_on = bool(self._get_dp(self.coordinator.dp_aux_power, False))
         if self.coordinator.dp_master_power:
-            master_on = bool(self._dps.get(self.coordinator.dp_master_power, True))
+            master_on = bool(self._get_dp(self.coordinator.dp_master_power, True))
             return aux_on and master_on
         return aux_on
 
@@ -381,12 +415,19 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
     @property
     def color_mode(self) -> ColorMode | None:
         """Return current operational color mode."""
-        current_mode = self._dps.get(self.coordinator.dp_aux_mode, MODE_WHITE)
-        if current_mode == MODE_COLOUR and self.coordinator.has_aux_color:
+        supported = self.supported_color_modes
+        if not supported:
+            return ColorMode.ONOFF
+
+        current_mode = self._get_dp(self.coordinator.dp_aux_mode, MODE_WHITE)
+
+        if current_mode == MODE_COLOUR and ColorMode.HS in supported:
             return ColorMode.HS
-        if self.coordinator.has_aux_color_temp:
+        if ColorMode.COLOR_TEMP in supported:
             return ColorMode.COLOR_TEMP
-        if self.coordinator.has_aux_brightness:
+        if ColorMode.HS in supported:
+            return ColorMode.HS
+        if ColorMode.BRIGHTNESS in supported:
             return ColorMode.BRIGHTNESS
         return ColorMode.ONOFF
 
@@ -396,16 +437,16 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if not self.coordinator.has_aux_brightness:
             return None
 
-        current_mode = self._dps.get(self.coordinator.dp_aux_mode, MODE_WHITE)
+        current_mode = self._get_dp(self.coordinator.dp_aux_mode, MODE_WHITE)
 
-        if (current_mode == MODE_COLOUR or not self._dps.get(self.coordinator.dp_aux_brightness)) and self.coordinator.has_aux_color:
-            hex_data = str(self._dps.get(self.coordinator.dp_aux_color, ""))
+        if (current_mode == MODE_COLOUR or not self._get_dp(self.coordinator.dp_aux_brightness)) and self.coordinator.has_aux_color:
+            hex_data = str(self._get_dp(self.coordinator.dp_aux_color, ""))
             parsed = tuya_hex_to_ha_hs(hex_data)
             if parsed is not None:
                 _, bright_ha = parsed
                 return bright_ha
 
-        val = self._dps.get(self.coordinator.dp_aux_brightness)
+        val = self._get_dp(self.coordinator.dp_aux_brightness)
         if val is not None:
             return tuya_brightness_to_ha(
                 int(val),
@@ -420,7 +461,7 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if not self.coordinator.has_aux_color:
             return None
 
-        hex_data = str(self._dps.get(self.coordinator.dp_aux_color, ""))
+        hex_data = str(self._get_dp(self.coordinator.dp_aux_color, ""))
         parsed = tuya_hex_to_ha_hs(hex_data)
         if parsed is not None:
             hs, _ = parsed
@@ -448,9 +489,10 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         # Handle Brightness only
         elif ATTR_BRIGHTNESS in kwargs:
             bright = kwargs[ATTR_BRIGHTNESS]
-            current_mode = self._dps.get(self.coordinator.dp_aux_mode, MODE_WHITE)
-            if current_mode == MODE_COLOUR and self.coordinator.has_aux_color and self.hs_color:
-                hex_str = ha_hs_to_tuya_hex(self.hs_color, brightness_ha=bright)
+            current_mode = self._get_dp(self.coordinator.dp_aux_mode, MODE_WHITE)
+            if current_mode == MODE_COLOUR and self.coordinator.has_aux_color:
+                active_hs = self.hs_color or (0.0, 0.0)
+                hex_str = ha_hs_to_tuya_hex(active_hs, brightness_ha=bright)
                 if self.coordinator.dp_aux_color:
                     payload[self.coordinator.dp_aux_color] = hex_str
             elif self.coordinator.dp_aux_brightness:
@@ -466,4 +508,9 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the auxiliary light off."""
-        await self.coordinator.async_send_dps({self.coordinator.dp_aux_power: False})
+        payload: dict[str, Any] = {self.coordinator.dp_aux_power: False}
+        if self.coordinator.dp_master_power:
+            main_is_on = bool(self._get_dp(self.coordinator.dp_power, False))
+            if not main_is_on:
+                payload[self.coordinator.dp_master_power] = False
+        await self.coordinator.async_send_dps(payload)
