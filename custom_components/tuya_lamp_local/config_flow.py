@@ -43,7 +43,8 @@ from .const import (
     DOMAIN,
     METHOD_CLOUD,
     METHOD_MANUAL,
-    METHOD_TUYA_LOCAL_KEY,
+    METHOD_TUYA_LOCAL_KEY_JSON,
+    METHOD_TUYA_LOCAL_KEY_SERVER,
     PROTOCOL_AUTO,
     PROTOCOLS,
     TUYA_REGIONS,
@@ -247,21 +248,24 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial mode selection step."""
         if user_input is not None:
             method = user_input.get(CONF_DISCOVERY_METHOD)
-            if method == METHOD_TUYA_LOCAL_KEY:
-                return await self.async_step_tuya_local_key()
+            if method == METHOD_TUYA_LOCAL_KEY_SERVER:
+                return await self.async_step_tuya_local_key_server()
+            if method == METHOD_TUYA_LOCAL_KEY_JSON:
+                return await self.async_step_tuya_local_key_json()
             if method == METHOD_CLOUD:
                 return await self.async_step_cloud()
             return await self.async_step_manual()
 
         methods = {
-            METHOD_TUYA_LOCAL_KEY: "Aus 'Tuya Local Key' Add-on (Server-URL oder Raw JSON)",
+            METHOD_TUYA_LOCAL_KEY_SERVER: "Tuya Local Key Add-on (Automatisch über Server-URL)",
+            METHOD_TUYA_LOCAL_KEY_JSON: "Raw JSON einfügen (aus Tuya Local Key kopiert)",
             METHOD_CLOUD: "Tuya IoT Developer Cloud (API Key & Secret)",
             METHOD_MANUAL: "Manuelle Direkteingabe (IP, ID, Local Key)",
         }
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_DISCOVERY_METHOD, default=METHOD_TUYA_LOCAL_KEY): vol.In(methods),
+                vol.Required(CONF_DISCOVERY_METHOD, default=METHOD_TUYA_LOCAL_KEY_SERVER): vol.In(methods),
             }
         )
 
@@ -270,43 +274,20 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=schema,
         )
 
-    async def async_step_tuya_local_key(
+    async def async_step_tuya_local_key_server(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Step to fetch from Tuya Local Key Add-on or paste its Raw JSON."""
+        """Step to fetch devices automatically from Tuya Local Key Add-on URL."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            raw_json = user_input.get(CONF_JSON_DATA, "").strip()
             server_url = user_input.get(CONF_SERVER_URL, "").strip()
-            file_path = user_input.get(CONF_FILE_PATH, "").strip()
+            try:
+                parsed_list = await self.hass.async_add_executor_job(
+                    _fetch_from_tuya_local_key_server, server_url
+                )
 
-            parsed_list: list[dict[str, Any]] = []
-
-            # 1. If JSON was pasted directly, parse it first
-            if raw_json or (file_path and os.path.exists(file_path)):
-                try:
-                    parsed_list = _parse_devices_json(raw_json, file_path)
-                except Exception as err:
-                    _LOGGER.error("JSON parsing error: %s", err)
-                    errors["base"] = "invalid_json"
-
-            # 2. Otherwise try fetching from server URL
-            elif server_url:
-                try:
-                    parsed_list = await self.hass.async_add_executor_job(
-                        _fetch_from_tuya_local_key_server, server_url
-                    )
-                except Exception as err:
-                    _LOGGER.warning("Could not fetch from server %s: %s", server_url, err)
-                    errors["base"] = "cannot_connect_server"
-            else:
-                errors["base"] = "no_data_provided"
-
-            if parsed_list:
-                # Match with LAN scan for current IP addresses
                 lan_mapping = await self.hass.async_add_executor_job(_sync_scan_lan)
-
                 self._discovered_devices = {}
                 for dev in parsed_list:
                     dev_id = dev["id"]
@@ -323,18 +304,65 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else:
                     return await self.async_step_select_device()
 
+            except Exception as err:
+                _LOGGER.warning("Could not connect to Tuya Local Key server %s: %s", server_url, err)
+                errors["base"] = "cannot_connect_server"
+
         schema = vol.Schema(
             {
-                vol.Optional(CONF_JSON_DATA, default=""): str,
-                vol.Optional(
-                    CONF_SERVER_URL, default=DEFAULT_TUYA_LOCAL_KEY_URL
-                ): str,
-                vol.Optional(CONF_FILE_PATH, default=""): str,
+                vol.Required(CONF_SERVER_URL, default=DEFAULT_TUYA_LOCAL_KEY_URL): str,
             }
         )
 
         return self.async_show_form(
-            step_id="tuya_local_key",
+            step_id="tuya_local_key_server",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_tuya_local_key_json(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Step to paste Raw JSON from Tuya Local Key Add-on."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            raw_json = user_input.get(CONF_JSON_DATA, "").strip()
+            if not raw_json:
+                errors["base"] = "no_data_provided"
+            else:
+                try:
+                    parsed_list = _parse_devices_json(raw_json)
+                    lan_mapping = await self.hass.async_add_executor_job(_sync_scan_lan)
+
+                    self._discovered_devices = {}
+                    for dev in parsed_list:
+                        dev_id = dev["id"]
+                        lan_info = lan_mapping.get(dev_id, {})
+                        if not dev["ip"] and lan_info.get("ip"):
+                            dev["ip"] = lan_info["ip"]
+                        if dev["version"] == PROTOCOL_AUTO and lan_info.get("version"):
+                            dev["version"] = lan_info["version"]
+
+                        self._discovered_devices[dev_id] = dev
+
+                    if not self._discovered_devices:
+                        errors["base"] = "no_devices_found"
+                    else:
+                        return await self.async_step_select_device()
+
+                except Exception as err:
+                    _LOGGER.error("Failed to parse JSON device data: %s", err)
+                    errors["base"] = "invalid_json"
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_JSON_DATA): str,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="tuya_local_key_json",
             data_schema=schema,
             errors=errors,
         )

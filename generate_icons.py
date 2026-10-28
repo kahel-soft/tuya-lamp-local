@@ -1,24 +1,23 @@
-"""Script to generate high-quality icons for Home Assistant Tuya Local Lamp."""
-import math
+"""Script to generate high-quality icons and brand assets for Home Assistant and HACS."""
+import os
 from PIL import Image, ImageDraw, ImageFilter
 
 
 def create_gradient_squircle(size, radius, color_start, color_end):
-    """Create a supersampled rounded rectangle with vertical/diagonal gradient."""
+    """Create a supersampled rounded rectangle with vertical gradient."""
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Draw gradient lines into a mask
+    # Gradient background
     base = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     for y in range(size):
-        # Diagonal factor
         ratio = y / float(size)
         r = int(color_start[0] + (color_end[0] - color_start[0]) * ratio)
         g = int(color_start[1] + (color_end[1] - color_start[1]) * ratio)
         b = int(color_start[2] + (color_end[2] - color_start[2]) * ratio)
         draw.line([(0, y), (size, y)], fill=(r, g, b, 255))
 
-    # Mask for rounded squircle
+    # Rounded squircle mask
     mask = Image.new("L", (size, size), 0)
     mask_draw = ImageDraw.Draw(mask)
     margin = int(size * 0.04)
@@ -33,22 +32,20 @@ def create_gradient_squircle(size, radius, color_start, color_end):
 
 
 def render_icon(target_size=512):
-    # 4x supersampling for ultra-crisp antialiasing
+    # 4x supersampling for clean antialiasing
     scale = 4
     S = target_size * scale
 
-    # Colors
-    c_orange_start = (255, 60, 0)   # Tuya energetic red-orange
+    c_orange_start = (255, 60, 0)   # Tuya vibrant flame orange
     c_orange_end = (255, 140, 0)    # Warm radiant amber
     white = (255, 255, 255, 255)
-    soft_white = (255, 255, 255, 220)
     glow_yellow = (255, 235, 180, 100)
 
     # 1. Base gradient tile with rounded corners
     squircle_radius = int(S * 0.22)
     img = create_gradient_squircle(S, squircle_radius, c_orange_start, c_orange_end)
 
-    # Separate layer for glowing bulb & elements
+    # Overlay for bulb elements
     overlay = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
@@ -57,7 +54,7 @@ def render_icon(target_size=512):
     bulb_r = int(S * 0.20)
     bulb_cy = bulb_top + bulb_r
 
-    # Ambient glow behind bulb
+    # Glow behind bulb
     glow_layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     glow_draw = ImageDraw.Draw(glow_layer)
     glow_draw.ellipse(
@@ -90,7 +87,7 @@ def render_icon(target_size=512):
         fill=white,
     )
 
-    # 4. Screw Base (Thread rings)
+    # 4. Screw Base
     base_top_y = neck_bot_y
     base_w = neck_bot_w
     ring_h = int(S * 0.024)
@@ -106,57 +103,65 @@ def render_icon(target_size=512):
             fill=base_color,
         )
 
-    # Bottom contact point
+    # Bottom contact
     contact_y = base_top_y + 3 * (ring_h + gap) + int(gap)
     contact_w = int(base_w * 0.45)
     contact_h = int(ring_h * 0.9)
     draw.ellipse([cx - contact_w, contact_y, cx + contact_w, contact_y + contact_h], fill=(200, 200, 200, 255))
 
-    # 5. Inner Emblem / Filament: Stylized Wi-Fi / Local Wireless arcs inside bulb
-    # Gives the unmistakable look of "Local Wi-Fi Smart Lamp"
+    # 5. Filament: Local Wi-Fi waves
     filament_layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     fil_draw = ImageDraw.Draw(filament_layer)
 
     fil_center_y = bulb_cy + int(bulb_r * 0.05)
-    fil_color = (255, 100, 0, 240)  # Cutout in contrasting Tuya flame orange
-
-    # Three concentric Wi-Fi broadcast waves inside the bulb
+    fil_color = (255, 100, 0, 240)
     stroke_w = int(S * 0.022)
 
-    # Small center dot
     dot_r = int(S * 0.032)
-    fil_draw.ellipse([cx - dot_r, fil_center_y + int(bulb_r * 0.4) - dot_r, cx + dot_r, fil_center_y + int(bulb_r * 0.4) + dot_r], fill=fil_color)
+    fil_draw.ellipse(
+        [cx - dot_r, fil_center_y + int(bulb_r * 0.4) - dot_r, cx + dot_r, fil_center_y + int(bulb_r * 0.4) + dot_r],
+        fill=fil_color,
+    )
 
-    # Inner arc
     r1 = int(bulb_r * 0.52)
     arc_y = fil_center_y + int(bulb_r * 0.4)
     fil_draw.arc([cx - r1, arc_y - r1, cx + r1, arc_y + r1], start=215, end=325, fill=fil_color, width=stroke_w)
 
-    # Outer arc
     r2 = int(bulb_r * 0.82)
     fil_draw.arc([cx - r2, arc_y - r2, cx + r2, arc_y + r2], start=220, end=320, fill=fil_color, width=stroke_w)
 
-    # Composite bulb layers
     overlay = Image.alpha_composite(overlay, filament_layer)
     img = Image.alpha_composite(img, overlay)
 
-    # 6. Downscale to target size with Lanczos resampling
-    final_icon = img.resize((target_size, target_size), Image.Resampling.LANCZOS)
-    return final_icon
+    return img.resize((target_size, target_size), Image.Resampling.LANCZOS)
 
 
 if __name__ == "__main__":
-    icon_512 = render_icon(512)
-    icon_256 = render_icon(256)
+    os.makedirs("custom_components/tuya_lamp_local/brand", exist_ok=True)
 
-    # Save to custom_components directory
+    icon_256 = render_icon(256)
+    icon_512 = render_icon(512)
+
+    # 1. Official Home Assistant Brand Directory structure (custom_components/<domain>/brand/)
+    icon_256.save("custom_components/tuya_lamp_local/brand/icon.png", "PNG")
+    icon_512.save("custom_components/tuya_lamp_local/brand/icon@2x.png", "PNG")
+    icon_512.save("custom_components/tuya_lamp_local/brand/logo.png", "PNG")
+    icon_512.save("custom_components/tuya_lamp_local/brand/logo@2x.png", "PNG")
+
+    # 2. Direct component root
     icon_512.save("custom_components/tuya_lamp_local/icon.png", "PNG")
     icon_512.save("custom_components/tuya_lamp_local/logo.png", "PNG")
 
-    # Save to root directory for HACS
+    # 3. Repository root for HACS
     icon_512.save("icon.png", "PNG")
+    icon_512.save("logo.png", "PNG")
 
-    print("[+] Successfully generated:")
-    print("    - custom_components/tuya_lamp_local/icon.png (512x512)")
-    print("    - custom_components/tuya_lamp_local/logo.png (512x512)")
-    print("    - icon.png (512x512)")
+    print("[+] All icons and brand assets generated successfully:")
+    print("    - custom_components/tuya_lamp_local/brand/icon.png (256x256)")
+    print("    - custom_components/tuya_lamp_local/brand/icon@2x.png (512x512)")
+    print("    - custom_components/tuya_lamp_local/brand/logo.png (512x512)")
+    print("    - custom_components/tuya_lamp_local/brand/logo@2x.png (512x512)")
+    print("    - custom_components/tuya_lamp_local/icon.png")
+    print("    - custom_components/tuya_lamp_local/logo.png")
+    print("    - icon.png (root)")
+    print("    - logo.png (root)")

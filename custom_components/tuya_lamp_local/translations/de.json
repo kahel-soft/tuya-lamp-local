@@ -8,13 +8,18 @@
           "discovery_method": "Einrichtungs-Methode"
         }
       },
-      "tuya_local_key": {
-        "title": "Import aus 'Tuya Local Key' Add-on",
-        "description": "Verbinde dich direkt mit deinem laufenden Tuya Local Key Add-on (z. B. http://localhost:8000) ODER füge das Raw JSON direkt aus dem Add-on ein.",
+      "tuya_local_key_server": {
+        "title": "Tuya Local Key Add-on (Server-URL)",
+        "description": "Verbindet sich automatisch mit dem laufenden Tuya Local Key Add-on auf deinem Home Assistant Server.",
         "data": {
-          "json_data": "Raw JSON (Hier aus dem Tuya Local Key Add-on einfügen)",
-          "server_url": "Tuya Local Key Add-on Server-URL",
-          "file_path": "Dateipfad (Optional, z. B. /config/devices.json)"
+          "server_url": "Add-on Server-URL (Standard: http://localhost:8000)"
+        }
+      },
+      "tuya_local_key_json": {
+        "title": "Raw JSON aus Tuya Local Key einfügen",
+        "description": "Öffne dein Tuya Local Key Add-on, klicke bei deiner Lampe auf 'Raw JSON' -> 'Copy' und füge den Text hier ein.",
+        "data": {
+          "json_data": "Raw JSON Text (hier einfügen)"
         }
       },
       "cloud": {
@@ -61,11 +66,11 @@
     },
     "error": {
       "cannot_connect": "Verbindung zur Lampe fehlgeschlagen. Bitte IP-Adresse, Local Key und Stromversorgung prüfen.",
-      "cannot_connect_server": "Verbindung zum Tuya Local Key Server fehlgeschlagen. Bitte Server-URL prüfen oder das JSON direkt hineinkopieren.",
-      "no_data_provided": "Bitte gib entweder eine Server-URL an oder füge das Raw JSON ein.",
+      "cannot_connect_server": "Verbindung zum Tuya Local Key Add-on fehlgeschlagen. Läuft das Add-on? Alternativ kannst du die Methode 'Raw JSON einfügen' nutzen.",
+      "no_data_provided": "Bitte füge den Raw JSON Text aus dem Add-on ein.",
       "cloud_fetch_error": "Geräteabruf aus der Tuya Cloud fehlgeschlagen. Bitte Region, Client ID, Secret und Device ID prüfen.",
       "no_devices_found": "Es wurden keine kompatiblen Geräte gefunden.",
-      "invalid_json": "JSON-Daten fehlerhaft oder Datei nicht gefunden. Bitte Format prüfen.",
+      "invalid_json": "JSON-Daten fehlerhaft. Bitte prüfe den kopierten Text.",
       "invalid_auth": "Authentifizierung mit dem angegebenen Local Key fehlgeschlagen."
     },
     "abort": {

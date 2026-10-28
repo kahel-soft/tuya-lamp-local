@@ -8,13 +8,18 @@
           "discovery_method": "Setup Method"
         }
       },
-      "tuya_local_key": {
-        "title": "Tuya Local Key Add-on Import",
-        "description": "Connect directly to the running Tuya Local Key add-on OR paste the Raw JSON from its web interface.",
+      "tuya_local_key_server": {
+        "title": "Tuya Local Key Add-on (Server URL)",
+        "description": "Connect automatically to your running Tuya Local Key Add-on.",
         "data": {
-          "json_data": "Raw JSON (Paste from Tuya Local Key Add-on here)",
-          "server_url": "Tuya Local Key Add-on URL (e.g. http://localhost:8000)",
-          "file_path": "File Path (Optional, e.g. /config/devices.json)"
+          "server_url": "Add-on Server URL (Default: http://localhost:8000)"
+        }
+      },
+      "tuya_local_key_json": {
+        "title": "Paste Raw JSON from Tuya Local Key",
+        "description": "Open your Tuya Local Key Add-on, copy the Raw JSON of your device(s), and paste it here.",
+        "data": {
+          "json_data": "Raw JSON Data"
         }
       },
       "cloud": {
@@ -61,11 +66,11 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to the lamp. Please verify the IP address, Local Key, and ensure the lamp is powered on.",
-      "cannot_connect_server": "Could not connect to the Tuya Local Key add-on URL. Please verify the server is running or paste the JSON directly.",
-      "no_data_provided": "Please enter a server URL or paste the Raw JSON.",
+      "cannot_connect_server": "Could not connect to the Tuya Local Key add-on URL. Ensure the add-on is running or use the 'Paste Raw JSON' method.",
+      "no_data_provided": "Please paste the Raw JSON text.",
       "cloud_fetch_error": "Failed to fetch devices from Tuya Cloud. Please verify your Region, Client ID, Client Secret, and Device ID.",
       "no_devices_found": "No compatible devices were found in the response.",
-      "invalid_json": "Could not parse JSON. Please check the formatting or file path.",
+      "invalid_json": "Could not parse JSON. Please check the formatting.",
       "invalid_auth": "Authentication failed with the provided Local Key."
     },
     "abort": {

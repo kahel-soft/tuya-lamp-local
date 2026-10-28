@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/kahel-soft/tuya-lamp-local/main/custom_components/tuya_lamp_local/brand/logo.png" width="160" alt="Tuya Local Lamp Logo">
+</p>
+
 # Tuya Local Lamp für Home Assistant (inkl. Home Assistant Green)
 
 Eine leichtgewichtige, 100 % lokale Home Assistant Integration (`custom_component`) zur direkten Steuerung von Tuya Smart Wi-Fi Lampen im Heimnetzwerk – **ohne Cloud, ohne Latenz und ohne externe Server/Zweitmaschinen**. Entwickelt für und vollständig kompatibel mit **Home Assistant Green** (Home Assistant OS).
@@ -18,21 +22,25 @@ Eine leichtgewichtige, 100 % lokale Home Assistant Integration (`custom_componen
 
 ## ⚙️ Lampe in Home Assistant einbinden (Webinterface)
 
-Beim Klick auf **Einstellungen -> Geräte & Dienste -> Integration hinzufügen -> "Tuya Local Lamp"** kannst du zwischen folgenden Methoden wählen:
+Beim Klick auf **Einstellungen -> Geräte & Dienste -> Integration hinzufügen -> "Tuya Local Lamp"** wählst du deine bevorzugte Methode:
 
-### 1. Methode: Aus 'Tuya Local Key' Add-on (Empfohlen bei Nutzung des Add-ons)
-Wenn du das beliebte Home Assistant Add-on **Tuya Local Key** (von Vineet Choudhary / QR-Code Login) nutzt:
-* **Option A (Automatisch per Server-URL):** Gib die lokale URL des Add-ons ein (Standard ist `http://localhost:8000`). Die Integration ruft die Geräteliste direkt per API ab.
-* **Option B (Copy & Paste):** Öffne dein *Tuya Local Key* Add-on, klicke beim gewünschten Gerät (oder in der Detailansicht) auf **Raw JSON** / **Copy**, und füge den Text direkt in das Feld *Raw JSON* ein.
-* **Ergebnis:** Home Assistant erkennt sofort alle Lampen samt Name, Device ID und 16-stelligem **Local Key** und gleicht zeitgleich die WLAN-IPs ab. Du wählst die Lampe einfach aus der Liste aus!
+### 1. Methode: Tuya Local Key Add-on (Server-URL) – Am einfachsten!
+Wenn das Add-on *Tuya Local Key* auf deinem Home Assistant Server läuft:
+1. Wähle **Tuya Local Key Add-on (Automatisch über Server-URL)**.
+2. Das Feld ist bereits mit `http://localhost:8000` vorausgefüllt.
+3. Klicke einfach auf **Absenden** – die Integration ruft alle Lampen ab und zeigt dir die Auswahlliste!
 
-### 2. Methode: Tuya IoT Developer Cloud (iot.tuya.com)
-Falls du ein Entwicklerkonto auf `iot.tuya.com` nutzt:
-* Trage Region (`Central Europe`), Client ID, Client Secret und eine Geräte-ID ein.
-* Home Assistant holt die Schlüssel direkt über die Tuya Cloud API ab.
+### 2. Methode: Raw JSON einfügen (aus Tuya Local Key kopiert)
+Falls du keinen lokalen Port nutzt:
+1. Öffne das *Tuya Local Key* Add-on und klicke bei deiner Lampe auf **Raw JSON** -> **Copy**.
+2. Wähle **Raw JSON einfügen** und füge den Text in das Textfeld ein.
+3. Klicke auf **Absenden** – alle Lampen werden sofort erkannt und zur Auswahl aufgelistet!
 
-### 3. Methode: Manuelle Direkteingabe
-Direkte Eingabe von Name, IP, Device ID und Local Key für einzelne Lampen.
+### 3. Methode: Tuya IoT Developer Cloud (iot.tuya.com)
+Direkte Abfrage über das Tuya Entwicklerkonto (Region, Client ID & Secret).
+
+### 4. Methode: Manuelle Direkteingabe
+Direkteingabe von IP, Device ID und Local Key für einzelne Lampen.
 
 ### 4. Nachträgliches Anpassen (Options Flow)
 Über das Zahnrad / **Konfigurieren** im Dashboard kannst du jederzeit IP-Adressen, Local Keys, Abfrageintervalle oder Farbtemperatur-Grenzwerte im laufenden Betrieb verändern.

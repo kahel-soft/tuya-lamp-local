@@ -30,7 +30,8 @@ CONF_SELECTED_DEVICE = "selected_device"
 
 DEFAULT_TUYA_LOCAL_KEY_URL = "http://localhost:8000"
 
-METHOD_TUYA_LOCAL_KEY = "tuya_local_key"
+METHOD_TUYA_LOCAL_KEY_SERVER = "tuya_local_key_server"
+METHOD_TUYA_LOCAL_KEY_JSON = "tuya_local_key_json"
 METHOD_CLOUD = "cloud"
 METHOD_MANUAL = "manual"
 
