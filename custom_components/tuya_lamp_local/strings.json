@@ -2,8 +2,52 @@
   "config": {
     "step": {
       "user": {
-        "title": "Tuya Local Lamp Setup",
-        "description": "Configure your Tuya Smart Lamp by entering its local network parameters.",
+        "title": "Add Tuya Lamp",
+        "description": "Choose how you want to add your Tuya lamp.",
+        "data": {
+          "discovery_method": "Setup Method"
+        }
+      },
+      "cloud": {
+        "title": "Tuya Cloud / Local Key Interface",
+        "description": "Enter your Tuya IoT credentials to automatically fetch all devices, names, IDs, and Local Keys.",
+        "data": {
+          "api_region": "Data Center Region",
+          "api_key": "Access ID / Client ID",
+          "api_secret": "Access Secret / Client Secret",
+          "api_device_id": "Any Device ID from your Tuya / Smart Life account"
+        }
+      },
+      "json_import": {
+        "title": "Import from devices.json",
+        "description": "Paste the content of your devices.json or provide a file path on your Home Assistant server.",
+        "data": {
+          "json_data": "JSON Data (Paste content here)",
+          "file_path": "File Path (e.g. /config/devices.json)"
+        }
+      },
+      "select_device": {
+        "title": "Select Tuya Device ({count} found)",
+        "description": "Select the device you want to add as a lamp in Home Assistant.",
+        "data": {
+          "selected_device": "Discovered Devices"
+        }
+      },
+      "confirm_device": {
+        "title": "Confirm Lamp Configuration",
+        "description": "Review and verify the connection details for this lamp.",
+        "data": {
+          "name": "Custom Lamp Name",
+          "host": "IP Address",
+          "device_id": "Device ID",
+          "local_key": "Local Key",
+          "protocol_version": "Protocol Version",
+          "poll_interval": "Polling Interval (Seconds)"
+        }
+      },
+      "manual": {
+        "title": "Manual Lamp Setup",
+        "description": "Directly enter the local parameters of your Tuya lamp.",
         "data": {
           "name": "Custom Lamp Name (Optional)",
           "host": "IP Address",
@@ -16,10 +60,14 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to the lamp. Please verify the IP address, Local Key, and ensure the lamp is powered on.",
+      "cloud_fetch_error": "Failed to fetch devices from Tuya Cloud. Please verify your Region, Client ID, Client Secret, and Device ID.",
+      "no_devices_found": "No compatible devices were found in the response.",
+      "invalid_json": "Could not parse JSON. Please check the formatting or file path.",
       "invalid_auth": "Authentication failed with the provided Local Key."
     },
     "abort": {
-      "already_configured": "This Tuya lamp is already configured in Home Assistant."
+      "already_configured": "This Tuya lamp is already configured in Home Assistant.",
+      "all_devices_configured": "All discovered devices from your account are already configured in Home Assistant."
     }
   },
   "options": {

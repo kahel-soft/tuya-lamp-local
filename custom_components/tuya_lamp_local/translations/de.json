@@ -2,24 +2,72 @@
   "config": {
     "step": {
       "user": {
-        "title": "Tuya Lokale Lampe einrichten",
-        "description": "Gib die lokalen Zugangsdaten deiner Tuya-Lampe ein. Die Verbindung wird direkt getestet.",
+        "title": "Tuya Lampe einbinden",
+        "description": "Wähle aus, wie du deine Tuya-Lampe einrichten möchtest.",
         "data": {
-          "name": "Eigener Name (Optional, z. B. Stehlampe Wohnzimmer)",
-          "host": "IP-Adresse der Lampe",
+          "discovery_method": "Einrichtungs-Methode"
+        }
+      },
+      "cloud": {
+        "title": "Tuya Cloud / Local Key Schnittstelle",
+        "description": "Gib deine Tuya IoT API-Daten ein, um alle Geräte, Namen, IDs und Local Keys automatisch abzurufen.",
+        "data": {
+          "api_region": "Rechenzentrum / Region",
+          "api_key": "Access ID / Client ID",
+          "api_secret": "Access Secret / Client Secret",
+          "api_device_id": "Beliebige Geräte-ID aus deinem Tuya / Smart Life Konto"
+        }
+      },
+      "json_import": {
+        "title": "Import aus devices.json / JSON-Text",
+        "description": "Füge den Inhalt deiner devices.json ein oder gib einen Dateipfad auf deinem Home Assistant Server an.",
+        "data": {
+          "json_data": "JSON-Inhalt (Hier einfügen)",
+          "file_path": "Dateipfad (z. B. /config/devices.json)"
+        }
+      },
+      "select_device": {
+        "title": "Gefundene Tuya-Geräte ({count} gefunden)",
+        "description": "Wähle das Gerät aus, das du als Lampe in Home Assistant übernehmen möchtest.",
+        "data": {
+          "selected_device": "Gefundenes Gerät auswählen"
+        }
+      },
+      "confirm_device": {
+        "title": "Lampe bestätigen & Verbindung testen",
+        "description": "Überprüfe die automatisch ermittelten Daten. Beim Absenden wird die Verbindung direkt getestet.",
+        "data": {
+          "name": "Name der Lampe",
+          "host": "IP-Adresse",
+          "device_id": "Geräte-ID (Device ID)",
+          "local_key": "Lokaler Schlüssel (Local Key)",
+          "protocol_version": "Protokollversion (auto empfohlen)",
+          "poll_interval": "Abfrageintervall (Sekunden)"
+        }
+      },
+      "manual": {
+        "title": "Manuelle Einrichtung",
+        "description": "Gib die lokalen Zugangsdaten der Tuya-Lampe direkt ein.",
+        "data": {
+          "name": "Eigener Name (Optional)",
+          "host": "IP-Adresse",
           "device_id": "Geräte-ID (Tuya Device ID)",
-          "local_key": "Lokaler Schlüssel (16-stelliger Local Key)",
-          "protocol_version": "Protokollversion (Empfehlung: auto)",
+          "local_key": "Lokaler Schlüssel (Local Key)",
+          "protocol_version": "Protokollversion (auto empfohlen)",
           "poll_interval": "Abfrageintervall (Sekunden)"
         }
       }
     },
     "error": {
       "cannot_connect": "Verbindung zur Lampe fehlgeschlagen. Bitte IP-Adresse, Local Key und Stromversorgung prüfen.",
+      "cloud_fetch_error": "Geräteabruf aus der Tuya Cloud fehlgeschlagen. Bitte Region, Client ID, Secret und Device ID prüfen.",
+      "no_devices_found": "Es wurden keine kompatiblen Geräte gefunden.",
+      "invalid_json": "JSON-Daten fehlerhaft oder Datei nicht gefunden. Bitte Format prüfen.",
       "invalid_auth": "Authentifizierung mit dem angegebenen Local Key fehlgeschlagen."
     },
     "abort": {
-      "already_configured": "Diese Tuya-Lampe ist bereits in Home Assistant eingerichtet."
+      "already_configured": "Diese Tuya-Lampe ist bereits in Home Assistant eingerichtet.",
+      "all_devices_configured": "Alle gefundenen Geräte aus deinem Konto sind bereits in Home Assistant eingerichtet."
     }
   },
   "options": {

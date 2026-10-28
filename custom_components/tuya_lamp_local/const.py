@@ -17,6 +17,28 @@ CONF_POLL_INTERVAL = "poll_interval"
 CONF_MIN_KELVIN = "min_kelvin"
 CONF_MAX_KELVIN = "max_kelvin"
 
+# Cloud & Import Discovery keys
+CONF_DISCOVERY_METHOD = "discovery_method"
+CONF_API_REGION = "api_region"
+CONF_API_KEY = "api_key"
+CONF_API_SECRET = "api_secret"
+CONF_API_DEVICE_ID = "api_device_id"
+CONF_JSON_DATA = "json_data"
+CONF_FILE_PATH = "file_path"
+CONF_SELECTED_DEVICE = "selected_device"
+
+METHOD_CLOUD = "cloud"
+METHOD_JSON = "json_import"
+METHOD_MANUAL = "manual"
+
+TUYA_REGIONS = {
+    "eu": "Central Europe (eu)",
+    "us": "Western America (us)",
+    "us-e": "Eastern America (us-e)",
+    "cn": "China (cn)",
+    "in": "India (in)",
+}
+
 # Optional DP Overrides (for exotic lamps)
 CONF_DP_POWER_OVERRIDE = "dp_power_override"
 CONF_DP_BRIGHT_OVERRIDE = "dp_bright_override"
