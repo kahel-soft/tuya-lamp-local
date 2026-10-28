@@ -47,9 +47,11 @@ CONF_API_DEVICE_ID = "api_device_id"
 CONF_JSON_DATA = "json_data"
 CONF_FILE_PATH = "file_path"
 CONF_SELECTED_DEVICE = "selected_device"
+CONF_SELECTED_DEVICES = "selected_devices"
 
 DEFAULT_TUYA_LOCAL_KEY_URL = "http://localhost:8000"
 
+METHOD_CACHED = "cached"
 METHOD_TUYA_LOCAL_KEY_SERVER = "tuya_local_key_server"
 METHOD_TUYA_LOCAL_KEY_JSON = "tuya_local_key_json"
 METHOD_CLOUD = "cloud"

@@ -11,7 +11,8 @@ Eine leichtgewichtige, 100 % lokale Home Assistant Integration (`custom_componen
 ## 🌟 Highlights & Funktionen
 
 * **100 % Lokale Steuerung:** Direkte Kommunikation via TCP Port 6668 im lokalen WLAN. Funktioniert auch bei vollständigem Internetausfall.
-* **Automatische Geräteerkennung & Local Key Abruf:** Schnittstelle zur Tuya Cloud API, die alle Geräte, Namen, IDs und Local Keys automatisch abruft und mit den lokalen WLAN-IPs abgleicht.
+* **Gerätelisten-Cache & Mehrfachauswahl (Neu in v1.6.0):** Einmal gefundene Geräte werden dauerhaft gespeichert. Du kannst mehrere oder alle Lampen per Checkbox auswählen und mit einem einzigen Klick gleichzeitig zu Home Assistant hinzufügen – ohne erneute Serverabfrage!
+* **Automatische Geräteerkennung & Local Key Abruf:** Schnittstelle zur Tuya Cloud API und dem Tuya Local Key Add-on, die alle Geräte, Namen, IDs und Local Keys automatisch abruft und mit den lokalen WLAN-IPs abgleicht.
 * **Übersichtliche Geräteauswahl:** Liste aller gefundenen Geräte im Home Assistant Webinterface – du wählst einfach per Mausklick aus, welche Lampe übernommen werden soll.
 * **Optimiert für Home Assistant Green (HOAS):** Keine separate Maschine, kein Docker-Sidecar, kein Node-RED oder MQTT-Broker nötig. Läuft direkt nativ im Core-Container des Green.
 * **Auto-Detection der Lampenfunktionen:** Erkennt beim ersten Verbindungsaufbau automatisch, ob es sich um eine reine Dimm-Lampe, Farbtemperatur-Lampe (CCT) oder RGB/RGBCW-Lampe handelt.
@@ -23,6 +24,13 @@ Eine leichtgewichtige, 100 % lokale Home Assistant Integration (`custom_componen
 ## ⚙️ Lampe in Home Assistant einbinden (Webinterface)
 
 Beim Klick auf **Einstellungen -> Geräte & Dienste -> Integration hinzufügen -> "Tuya Local Lamp"** wählst du deine bevorzugte Methode:
+
+### 🌟 Neu: Gefundene Geräte hinzufügen (Geräte-Cache & Mehrfachauswahl)
+Sobald du einmal Lampen über den Tuya Local Key Server, Raw JSON oder Cloud gescannt hast, merkt sich die Integration alle noch nicht eingerichteten Geräte im Speicher (`.storage`):
+* Beim erneuten Hinzufügen der Integration steht direkt ganz oben:  
+  **`Gefundene Geräte hinzufügen (X verfügbar)`** – komplett ohne erneute Serverabfrage oder JSON-Kopieren!
+* **Mehrfachauswahl (Multi-Select):** Du kannst mehrere oder alle Lampen per Checkbox auswählen und mit einem Klick alle gleichzeitig importieren. Jede Lampe wird automatisch als eigenes Gerät in Home Assistant eingerichtet.
+* Wenn du nur **eine einzelne Lampe** auswählst, gelangst du zum Bestätigungs- und Test-Dialog, in dem du Name, IP und Verbindung vor dem Speichern prüfen kannst.
 
 ### 1. Methode: Tuya Local Key Add-on (Server-URL) – Am einfachsten!
 Wenn das Add-on *Tuya Local Key* auf deinem Home Assistant Server läuft:

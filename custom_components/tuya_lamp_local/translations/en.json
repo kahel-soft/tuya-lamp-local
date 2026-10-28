@@ -35,8 +35,9 @@
       },
       "select_device": {
         "title": "Select Tuya Device ({count} found)",
-        "description": "Select the device you want to add as a lamp in Home Assistant.",
+        "description": "Select the device(s) you want to add as a lamp in Home Assistant. Multi-selection is supported to add multiple lamps at once.",
         "data": {
+          "selected_devices": "Discovered Devices",
           "selected_device": "Discovered Devices"
         }
       },
@@ -66,6 +67,7 @@
       }
     },
     "error": {
+      "no_device_selected": "Please select at least one device.",
       "cannot_connect": "Failed to connect to the lamp. Please verify the IP address, Local Key, and ensure the lamp is powered on.",
       "cannot_connect_server": "Could not connect to the Tuya Local Key add-on URL. Ensure the add-on is running or use the 'Paste Raw JSON' method.",
       "no_data_provided": "Please paste the Raw JSON text.",

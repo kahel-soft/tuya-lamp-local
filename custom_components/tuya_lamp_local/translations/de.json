@@ -35,8 +35,9 @@
       },
       "select_device": {
         "title": "Gefundene Tuya-Geräte ({count} gefunden)",
-        "description": "Wähle das Gerät aus, das du als Lampe in Home Assistant übernehmen möchtest.",
+        "description": "Wähle die Lampe(n) aus, die du in Home Assistant übernehmen möchtest. Du kannst mehrere Geräte gleichzeitig auswählen, um sie auf einmal hinzuzufügen.",
         "data": {
+          "selected_devices": "Geräte auswählen",
           "selected_device": "Gefundenes Gerät auswählen"
         }
       },
@@ -66,6 +67,7 @@
       }
     },
     "error": {
+      "no_device_selected": "Bitte wähle mindestens ein Gerät aus.",
       "cannot_connect": "Verbindung zur Lampe fehlgeschlagen. Bitte IP-Adresse, Local Key und Stromversorgung prüfen.",
       "cannot_connect_server": "Verbindung zum Tuya Local Key Add-on fehlgeschlagen. Läuft das Add-on? Alternativ kannst du die Methode 'Raw JSON einfügen' nutzen.",
       "no_data_provided": "Bitte füge den Raw JSON Text aus dem Add-on ein.",

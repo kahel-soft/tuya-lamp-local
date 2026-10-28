@@ -14,9 +14,10 @@ import urllib.parse
 import urllib.request
 
 from homeassistant import config_entries
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.storage import Store
 import tinytuya
 import voluptuous as vol
 
@@ -51,6 +52,7 @@ from .const import (
     CONF_POLL_INTERVAL,
     CONF_PROTOCOL_VERSION,
     CONF_SELECTED_DEVICE,
+    CONF_SELECTED_DEVICES,
     CONF_SERVER_URL,
     DEFAULT_BRIGHTNESS_MAX,
     DEFAULT_BRIGHTNESS_MIN,
@@ -61,6 +63,7 @@ from .const import (
     DEFAULT_POLL_INTERVAL,
     DEFAULT_TUYA_LOCAL_KEY_URL,
     DOMAIN,
+    METHOD_CACHED,
     METHOD_CLOUD,
     METHOD_MANUAL,
     METHOD_TUYA_LOCAL_KEY_JSON,
@@ -474,6 +477,35 @@ def _fetch_from_tuya_local_key_server(server_url: str) -> list[dict[str, Any]]:
     raise Exception(f"Konnte keine Gerätedaten von {server_url} abrufen: {last_error}")
 
 
+STORAGE_KEY = f"{DOMAIN}_device_cache"
+STORAGE_VERSION = 1
+
+
+async def _async_get_cached_devices(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
+    """Retrieve cached Tuya devices from hass.data or persistent storage."""
+    hass.data.setdefault(DOMAIN, {})
+    if "cached_devices" in hass.data[DOMAIN]:
+        return dict(hass.data[DOMAIN]["cached_devices"])
+
+    store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+    stored = await store.async_load()
+    if isinstance(stored, dict):
+        hass.data[DOMAIN]["cached_devices"] = stored
+        return dict(stored)
+
+    hass.data[DOMAIN]["cached_devices"] = {}
+    return {}
+
+
+async def _async_save_cached_devices(hass: HomeAssistant, devices: dict[str, dict[str, Any]]) -> None:
+    """Save discovered Tuya devices into memory and persistent storage."""
+    hass.data.setdefault(DOMAIN, {})
+    cached = hass.data[DOMAIN].setdefault("cached_devices", {})
+    cached.update(devices)
+    store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+    await store.async_save(cached)
+
+
 class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Tuya Local Lamp."""
 
@@ -496,8 +528,20 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle the initial mode selection step."""
+        cached_devices = await _async_get_cached_devices(self.hass)
+        current_ids = self._async_current_ids()
+
+        unconfigured_cached = {
+            d_id: info
+            for d_id, info in cached_devices.items()
+            if d_id not in current_ids
+        }
+
         if user_input is not None:
             method = user_input.get(CONF_DISCOVERY_METHOD)
+            if method == METHOD_CACHED:
+                self._discovered_devices = unconfigured_cached
+                return await self.async_step_select_device()
             if method == METHOD_TUYA_LOCAL_KEY_SERVER:
                 return await self.async_step_tuya_local_key_server()
             if method == METHOD_TUYA_LOCAL_KEY_JSON:
@@ -506,16 +550,19 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_cloud()
             return await self.async_step_manual()
 
-        methods = {
-            METHOD_TUYA_LOCAL_KEY_SERVER: "Tuya Local Key Add-on (Automatisch über Server-URL)",
-            METHOD_TUYA_LOCAL_KEY_JSON: "Raw JSON einfügen (aus Tuya Local Key kopiert)",
-            METHOD_CLOUD: "Tuya IoT Developer Cloud (API Key & Secret)",
-            METHOD_MANUAL: "Manuelle Direkteingabe (IP, ID, Local Key)",
-        }
+        methods = {}
+        if unconfigured_cached:
+            methods[METHOD_CACHED] = f"Gefundene Geräte hinzufügen ({len(unconfigured_cached)} verfügbar)"
+        methods[METHOD_TUYA_LOCAL_KEY_SERVER] = "Tuya Local Key Add-on (Automatisch über Server-URL)"
+        methods[METHOD_TUYA_LOCAL_KEY_JSON] = "Raw JSON einfügen (aus Tuya Local Key kopiert)"
+        methods[METHOD_CLOUD] = "Tuya IoT Developer Cloud (API Key & Secret)"
+        methods[METHOD_MANUAL] = "Manuelle Direkteingabe (IP, ID, Local Key)"
+
+        default_method = METHOD_CACHED if unconfigured_cached else METHOD_TUYA_LOCAL_KEY_SERVER
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_DISCOVERY_METHOD, default=METHOD_TUYA_LOCAL_KEY_SERVER): vol.In(methods),
+                vol.Required(CONF_DISCOVERY_METHOD, default=default_method): vol.In(methods),
             }
         )
 
@@ -551,6 +598,7 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not self._discovered_devices:
                     errors["base"] = "no_devices_found"
                 else:
+                    await _async_save_cached_devices(self.hass, self._discovered_devices)
                     return await self.async_step_select_device()
 
             except Exception as err:
@@ -600,6 +648,7 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     if not self._discovered_devices:
                         errors["base"] = "no_devices_found"
                     else:
+                        await _async_save_cached_devices(self.hass, self._discovered_devices)
                         return await self.async_step_select_device()
 
                 except Exception as err:
@@ -674,6 +723,7 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not self._discovered_devices:
                     errors["base"] = "no_devices_found"
                 else:
+                    await _async_save_cached_devices(self.hass, self._discovered_devices)
                     return await self.async_step_select_device()
 
             except Exception as err:
@@ -698,7 +748,7 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_select_device(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Step to present a list of discovered devices for the user to choose."""
+        """Step to present a list of discovered devices for the user to choose (with multi-select)."""
         current_ids = self._async_current_ids()
 
         # Filter out devices already configured in Home Assistant
@@ -711,10 +761,26 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not available_devices:
             return self.async_abort(reason="all_devices_configured")
 
+        errors: dict[str, str] = {}
+
         if user_input is not None:
-            selected_id = user_input[CONF_SELECTED_DEVICE]
-            self._selected_device = available_devices.get(selected_id)
-            return await self.async_step_confirm_device()
+            selected_raw = user_input.get(CONF_SELECTED_DEVICES) or user_input.get(CONF_SELECTED_DEVICE)
+            if isinstance(selected_raw, str):
+                selected_ids = [selected_raw]
+            elif isinstance(selected_raw, list):
+                selected_ids = selected_raw
+            else:
+                selected_ids = []
+
+            if not selected_ids:
+                errors["base"] = "no_device_selected"
+            elif len(selected_ids) == 1:
+                # Single device selected: allow confirmation & testing
+                self._selected_device = available_devices.get(selected_ids[0])
+                return await self.async_step_confirm_device()
+            else:
+                # Multiple devices selected: create all at once!
+                return await self._async_create_multiple_devices(selected_ids, available_devices)
 
         choices = {}
         for d_id, info in available_devices.items():
@@ -725,15 +791,77 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_SELECTED_DEVICE): vol.In(choices),
+                vol.Required(
+                    CONF_SELECTED_DEVICES,
+                    default=list(choices.keys())
+                ): cv.multi_select(choices),
             }
         )
 
         return self.async_show_form(
             step_id="select_device",
             data_schema=schema,
+            errors=errors,
             description_placeholders={"count": str(len(choices))},
         )
+
+    async def _async_create_multiple_devices(
+        self, selected_ids: list[str], available_devices: dict[str, dict[str, Any]]
+    ) -> FlowResult:
+        """Create multiple config entries at once for all selected devices."""
+        first_id = selected_ids[0]
+        first_dev = available_devices[first_id]
+
+        # Trigger background creation flows for all subsequent devices
+        for d_id in selected_ids[1:]:
+            dev = available_devices.get(d_id)
+            if not dev:
+                continue
+            custom_name = dev.get("name", "").strip()
+            dev_host = dev.get("ip", "").strip()
+            dev_data = {
+                CONF_NAME: custom_name,
+                CONF_HOST: dev_host,
+                CONF_DEVICE_ID: d_id,
+                CONF_LOCAL_KEY: dev.get("key", "").strip(),
+                CONF_PROTOCOL_VERSION: dev.get("version", PROTOCOL_AUTO),
+                CONF_POLL_INTERVAL: DEFAULT_POLL_INTERVAL,
+            }
+            self.hass.async_create_task(
+                self.hass.config_entries.flow.async_init(
+                    DOMAIN,
+                    context={"source": config_entries.SOURCE_IMPORT},
+                    data=dev_data,
+                )
+            )
+
+        # Create entry for the first device in this flow
+        first_name = first_dev.get("name", "").strip()
+        first_host = first_dev.get("ip", "").strip()
+        await self.async_set_unique_id(first_id)
+        self._abort_if_unique_id_configured()
+
+        first_data = {
+            CONF_NAME: first_name,
+            CONF_HOST: first_host,
+            CONF_DEVICE_ID: first_id,
+            CONF_LOCAL_KEY: first_dev.get("key", "").strip(),
+            CONF_PROTOCOL_VERSION: first_dev.get("version", PROTOCOL_AUTO),
+            CONF_POLL_INTERVAL: DEFAULT_POLL_INTERVAL,
+        }
+        title = first_name if first_name else f"Tuya Lamp ({first_host})"
+        return self.async_create_entry(title=title, data=first_data)
+
+    async def async_step_import(self, import_data: dict[str, Any]) -> FlowResult:
+        """Handle programmatic creation of multiple selected devices."""
+        device_id = import_data[CONF_DEVICE_ID]
+        await self.async_set_unique_id(device_id)
+        self._abort_if_unique_id_configured()
+
+        custom_name = import_data.get(CONF_NAME, "").strip()
+        dev_host = import_data.get(CONF_HOST, "").strip()
+        title = custom_name if custom_name else f"Tuya Lamp ({dev_host})"
+        return self.async_create_entry(title=title, data=import_data)
 
     async def async_step_confirm_device(
         self, user_input: dict[str, Any] | None = None
