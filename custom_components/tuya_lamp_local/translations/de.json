@@ -66,7 +66,7 @@
     },
     "error": {
       "cannot_connect": "Verbindung zur Lampe fehlgeschlagen. Bitte IP-Adresse, Local Key und Stromversorgung prüfen.",
-      "cannot_connect_server": "Verbindung zum Tuya Local Key Add-on fehlgeschlagen. Läuft das Add-on? Alternativ kannst du die Methode 'Raw JSON einfügen' nutzen.",
+      "cannot_connect_server": "Verbindung fehlgeschlagen. Ingress-Add-ons haben Port 8000 standardmäßig deaktiviert. Lösung: Nutze im Menü 'Raw JSON einfügen' (aus dem Add-on kopieren) oder aktiviere Port 8000 in den Add-on-Einstellungen unter 'Konfiguration -> Netzwerk'.",
       "no_data_provided": "Bitte füge den Raw JSON Text aus dem Add-on ein.",
       "cloud_fetch_error": "Geräteabruf aus der Tuya Cloud fehlgeschlagen. Bitte Region, Client ID, Secret und Device ID prüfen.",
       "no_devices_found": "Es wurden keine kompatiblen Geräte gefunden.",

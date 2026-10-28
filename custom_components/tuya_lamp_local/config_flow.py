@@ -198,28 +198,40 @@ def _fetch_from_tuya_local_key_server(server_url: str) -> list[dict[str, Any]]:
     if not server_url.startswith("http://") and not server_url.startswith("https://"):
         server_url = f"http://{server_url}"
 
-    endpoints = [
-        f"{server_url}/api/devices",
-        f"{server_url}/devices",
-        f"{server_url}/api/v1/devices",
-        server_url,
-    ]
+    # Build candidates: user URL plus common Home Assistant Docker add-on hostnames
+    candidates = [server_url]
+    if "localhost" in server_url or "127.0.0.1" in server_url:
+        candidates.extend(
+            [
+                server_url.replace("localhost", "127.0.0.1"),
+                server_url.replace("localhost", "tuya-local-key").replace("127.0.0.1", "tuya-local-key"),
+                server_url.replace("localhost", "local-tuya-local-key").replace("127.0.0.1", "local-tuya-local-key"),
+                server_url.replace("localhost", "homeassistant").replace("127.0.0.1", "homeassistant"),
+            ]
+        )
 
     last_error = None
-    for url in endpoints:
-        try:
-            req = urllib.request.Request(
-                url,
-                headers={"Accept": "application/json", "User-Agent": "HomeAssistant-TuyaLamp"},
-            )
-            with urllib.request.urlopen(req, timeout=4) as response:
-                content = response.read().decode("utf-8")
-                parsed = _parse_devices_json(content)
-                if parsed:
-                    return parsed
-        except Exception as err:
-            last_error = err
-            continue
+    for base in candidates:
+        endpoints = [
+            f"{base}/api/devices",
+            f"{base}/devices",
+            f"{base}/api/v1/devices",
+            base,
+        ]
+        for url in endpoints:
+            try:
+                req = urllib.request.Request(
+                    url,
+                    headers={"Accept": "application/json", "User-Agent": "HomeAssistant-TuyaLamp"},
+                )
+                with urllib.request.urlopen(req, timeout=3) as response:
+                    content = response.read().decode("utf-8")
+                    parsed = _parse_devices_json(content)
+                    if parsed:
+                        return parsed
+            except Exception as err:
+                last_error = err
+                continue
 
     raise Exception(f"Verbindung zu {server_url} fehlgeschlagen: {last_error}")
 

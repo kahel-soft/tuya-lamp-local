@@ -66,7 +66,7 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to the lamp. Please verify the IP address, Local Key, and ensure the lamp is powered on.",
-      "cannot_connect_server": "Could not connect to the Tuya Local Key add-on URL. Ensure the add-on is running or use the 'Paste Raw JSON' method.",
+      "cannot_connect_server": "Connection failed. Ingress add-ons keep port 8000 disabled by default. Solution: Use 'Paste Raw JSON' (copy from the add-on) or enable port 8000 in the add-on settings under 'Configuration -> Network'.",
       "no_data_provided": "Please paste the Raw JSON text.",
       "cloud_fetch_error": "Failed to fetch devices from Tuya Cloud. Please verify your Region, Client ID, Client Secret, and Device ID.",
       "no_devices_found": "No compatible devices were found in the response.",
