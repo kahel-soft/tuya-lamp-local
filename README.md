@@ -42,8 +42,16 @@ Direkte Abfrage über das Tuya Entwicklerkonto (Region, Client ID & Secret).
 ### 4. Methode: Manuelle Direkteingabe
 Direkteingabe von IP, Device ID und Local Key für einzelne Lampen.
 
-### 4. Nachträgliches Anpassen (Options Flow)
-Über das Zahnrad / **Konfigurieren** im Dashboard kannst du jederzeit IP-Adressen, Local Keys, Abfrageintervalle oder Farbtemperatur-Grenzwerte im laufenden Betrieb verändern.
+### 5. Nachträgliches Anpassen & DP-Konfiguration (Options Flow)
+Über das Zahnrad / **Konfigurieren** im Dashboard kannst du jederzeit zwei Bereiche anpassen:
+* **Netzwerk & Verbindung:** IP-Adresse, Local Key, Protokollversion oder Abfrageintervall ändern.
+* **Datenpunkte & Grenzwerte (DPs):**
+  * Zeigt die **aktuellen Live-Werte der Lampe** direkt an (z. B. `DP 20: True | DP 21: white | DP 22: 1000 | ...`).
+  * **Power-DP:** Zuordnung des Ein/Aus-Schalters (z. B. 20 oder 1).
+  * **Helligkeits-DP & Grenzwerte:** DP für Dimmer (z. B. 22 oder 3) sowie Mindest- und Maximalwert (z. B. 10 bis 1000 oder 255).
+  * **Farbtemperatur-DP (CCT):** DP für Weißtöne (z. B. 23 oder 4), Grenzwerte (0 bis 1000), Kelvin-Bereich (2700K - 6500K) und Option zum **Invertieren** (Kalt/Warm umkehren).
+  * **Farb-DP & Codierung:** DP für RGB/HSV (z. B. 24 oder 5) und Format (12-stelliges HSV-Hex oder 6-stelliges RGB-Hex).
+  * **Modus-DP:** Betriebsmodus (z. B. 21 oder 2).
 
 ---
 

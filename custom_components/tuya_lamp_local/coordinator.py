@@ -11,15 +11,32 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 import tinytuya
 
 from .const import (
+    COLOR_TYPE_HSV_HEX_12,
+    COLOR_TYPE_RGB_HEX_6,
+    CONF_BRIGHTNESS_MAX,
+    CONF_BRIGHTNESS_MIN,
+    CONF_COLOR_TEMP_MAX,
+    CONF_COLOR_TEMP_MIN,
+    CONF_COLOR_TEMP_REVERSE,
+    CONF_COLOR_TYPE,
     CONF_DEVICE_ID,
-    CONF_DP_BRIGHT_OVERRIDE,
-    CONF_DP_COLOR_OVERRIDE,
-    CONF_DP_POWER_OVERRIDE,
-    CONF_DP_TEMP_OVERRIDE,
+    CONF_DP_BRIGHTNESS,
+    CONF_DP_COLOR,
+    CONF_DP_COLOR_TEMP,
+    CONF_DP_MODE,
+    CONF_DP_POWER,
     CONF_HOST,
     CONF_LOCAL_KEY,
+    CONF_MAX_KELVIN,
+    CONF_MIN_KELVIN,
     CONF_POLL_INTERVAL,
     CONF_PROTOCOL_VERSION,
+    DEFAULT_BRIGHTNESS_MAX,
+    DEFAULT_BRIGHTNESS_MIN,
+    DEFAULT_COLOR_TEMP_MAX,
+    DEFAULT_COLOR_TEMP_MIN,
+    DEFAULT_MAX_KELVIN,
+    DEFAULT_MIN_KELVIN,
     DEFAULT_POLL_INTERVAL,
     DOMAIN,
     DP_LEGACY_BRIGHTNESS,
@@ -57,25 +74,54 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         poll_interval: int = opts.get(CONF_POLL_INTERVAL, data.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL))
 
-        # Optional DP overrides from UI
-        self._dp_power_override = opts.get(CONF_DP_POWER_OVERRIDE, "").strip()
-        self._dp_bright_override = opts.get(CONF_DP_BRIGHT_OVERRIDE, "").strip()
-        self._dp_temp_override = opts.get(CONF_DP_TEMP_OVERRIDE, "").strip()
-        self._dp_color_override = opts.get(CONF_DP_COLOR_OVERRIDE, "").strip()
+        # User-configured granular DP mappings
+        user_power = str(opts.get(CONF_DP_POWER, data.get(CONF_DP_POWER, ""))).strip()
+        user_mode = str(opts.get(CONF_DP_MODE, data.get(CONF_DP_MODE, ""))).strip()
+        user_bright = str(opts.get(CONF_DP_BRIGHTNESS, data.get(CONF_DP_BRIGHTNESS, ""))).strip()
+        user_temp = str(opts.get(CONF_DP_COLOR_TEMP, data.get(CONF_DP_COLOR_TEMP, ""))).strip()
+        user_color = str(opts.get(CONF_DP_COLOR, data.get(CONF_DP_COLOR, ""))).strip()
+
+        self.custom_dp_power = user_power if user_power and user_power != "auto" else None
+        self.custom_dp_mode = user_mode if user_mode and user_mode != "auto" else None
+        self.custom_dp_brightness = user_bright if user_bright and user_bright != "auto" else None
+        self.custom_dp_color_temp = user_temp if user_temp and user_temp != "auto" else None
+        self.custom_dp_color = user_color if user_color and user_color != "auto" else None
+
+        # Value ranges & scaling
+        self.brightness_min: int = int(
+            opts.get(CONF_BRIGHTNESS_MIN, data.get(CONF_BRIGHTNESS_MIN, DEFAULT_BRIGHTNESS_MIN))
+        )
+        self.brightness_max: int = int(
+            opts.get(CONF_BRIGHTNESS_MAX, data.get(CONF_BRIGHTNESS_MAX, DEFAULT_BRIGHTNESS_MAX))
+        )
+
+        self.color_temp_min: int = int(
+            opts.get(CONF_COLOR_TEMP_MIN, data.get(CONF_COLOR_TEMP_MIN, DEFAULT_COLOR_TEMP_MIN))
+        )
+        self.color_temp_max: int = int(
+            opts.get(CONF_COLOR_TEMP_MAX, data.get(CONF_COLOR_TEMP_MAX, DEFAULT_COLOR_TEMP_MAX))
+        )
+        self.color_temp_reverse: bool = bool(
+            opts.get(CONF_COLOR_TEMP_REVERSE, data.get(CONF_COLOR_TEMP_REVERSE, False))
+        )
+
+        self.min_kelvin: int = int(opts.get(CONF_MIN_KELVIN, data.get(CONF_MIN_KELVIN, DEFAULT_MIN_KELVIN)))
+        self.max_kelvin: int = int(opts.get(CONF_MAX_KELVIN, data.get(CONF_MAX_KELVIN, DEFAULT_MAX_KELVIN)))
+
+        self.color_type: str = str(
+            opts.get(CONF_COLOR_TYPE, data.get(CONF_COLOR_TYPE, COLOR_TYPE_HSV_HEX_12))
+        )
 
         # Socket lock: Tuya devices only allow 1 concurrent connection
         self._lock = asyncio.Lock()
         self._device: tinytuya.BulbDevice | None = None
 
-        # Datapoint layout mapping (resolved dynamically upon initial connection)
-        self.dp_power: str = self._dp_power_override or DP_MODERN_POWER
-        self.dp_mode: str = DP_MODERN_MODE
-        self.dp_brightness: str = self._dp_bright_override or DP_MODERN_BRIGHTNESS
-        self.dp_color_temp: str = self._dp_temp_override or DP_MODERN_COLOR_TEMP
-        self.dp_color: str = self._dp_color_override or DP_MODERN_COLOR
-
-        self.max_brightness_tuya: int = 1000
-        self.max_color_temp_tuya: int = 1000
+        # Datapoint layout mapping (defaults before detection)
+        self.dp_power: str = self.custom_dp_power or DP_MODERN_POWER
+        self.dp_mode: str = self.custom_dp_mode or DP_MODERN_MODE
+        self.dp_brightness: str = self.custom_dp_brightness or DP_MODERN_BRIGHTNESS
+        self.dp_color_temp: str = self.custom_dp_color_temp or DP_MODERN_COLOR_TEMP
+        self.dp_color: str = self.custom_dp_color or DP_MODERN_COLOR
 
         self.has_brightness: bool = False
         self.has_color_temp: bool = False
@@ -105,7 +151,6 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 local_key=self.local_key,
                 version=version_val,
             )
-            # 4 seconds socket timeout - safe for HA Green without blocking the thread pool
             dev.set_socketTimeout(4)
             dev.set_dpsUsed({})
             self._device = dev
@@ -120,7 +165,6 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(f"Invalid response from Tuya device: {data}")
 
         if "Error" in data:
-            # If auto protocol was requested and 3.3 failed, probe 3.4/3.5
             if self.protocol_str == PROTOCOL_AUTO:
                 for candidate_version in [3.4, 3.5, 3.1]:
                     _LOGGER.debug(
@@ -146,49 +190,68 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return data
 
     def _detect_datapoint_layout(self, dps: dict[str, Any]) -> None:
-        """Inspect DPS dictionary to automatically identify lamp capabilities and layout."""
-        if DP_MODERN_POWER in dps:
-            # Modern Tuya Light (DP 20-24)
-            self.dp_power = self._dp_power_override or DP_MODERN_POWER
-            self.dp_mode = DP_MODERN_MODE
-            self.dp_brightness = self._dp_bright_override or DP_MODERN_BRIGHTNESS
-            self.dp_color_temp = self._dp_temp_override or DP_MODERN_COLOR_TEMP
-            self.dp_color = self._dp_color_override or DP_MODERN_COLOR
-            self.max_brightness_tuya = 1000
-            self.max_color_temp_tuya = 1000
+        """Inspect DPS dictionary to identify lamp capabilities and layout."""
+        if self.custom_dp_power:
+            self.dp_power = self.custom_dp_power
+        elif DP_MODERN_POWER in dps:
+            self.dp_power = DP_MODERN_POWER
         elif DP_LEGACY_POWER in dps:
-            # Legacy Tuya Light (DP 1-5)
-            self.dp_power = self._dp_power_override or DP_LEGACY_POWER
-            self.dp_mode = DP_LEGACY_MODE
-            self.dp_brightness = self._dp_bright_override or DP_LEGACY_BRIGHTNESS
-            self.dp_color_temp = self._dp_temp_override or DP_LEGACY_COLOR_TEMP
-            self.dp_color = self._dp_color_override or DP_LEGACY_COLOR
-            # Legacy devices frequently use 255 for brightness and temp
-            bright_val = dps.get(self.dp_brightness, 0)
-            self.max_brightness_tuya = 1000 if bright_val > 255 else 255
-            self.max_color_temp_tuya = 1000 if bright_val > 255 else 255
+            self.dp_power = DP_LEGACY_POWER
         else:
-            self.dp_power = self._dp_power_override or DP_MODERN_POWER
-            self.dp_brightness = self._dp_bright_override or DP_MODERN_BRIGHTNESS
-            self.dp_color_temp = self._dp_temp_override or DP_MODERN_COLOR_TEMP
-            self.dp_color = self._dp_color_override or DP_MODERN_COLOR
-            _LOGGER.warning("Could not clearly identify standard DP layout in: %s. Using configured/modern mappings", dps)
+            self.dp_power = DP_MODERN_POWER
 
-        self.has_brightness = self.dp_brightness in dps
-        self.has_color_temp = self.dp_color_temp in dps
-        self.has_color = self.dp_color in dps
+        if self.custom_dp_mode:
+            self.dp_mode = self.custom_dp_mode
+        elif DP_MODERN_MODE in dps:
+            self.dp_mode = DP_MODERN_MODE
+        elif DP_LEGACY_MODE in dps:
+            self.dp_mode = DP_LEGACY_MODE
+
+        if self.custom_dp_brightness:
+            self.dp_brightness = self.custom_dp_brightness
+        elif DP_MODERN_BRIGHTNESS in dps:
+            self.dp_brightness = DP_MODERN_BRIGHTNESS
+        elif DP_LEGACY_BRIGHTNESS in dps:
+            self.dp_brightness = DP_LEGACY_BRIGHTNESS
+            # If user didn't explicitly override brightness max, detect if legacy is 255
+            bright_val = dps.get(DP_LEGACY_BRIGHTNESS, 0)
+            if bright_val <= 255 and self.brightness_max == DEFAULT_BRIGHTNESS_MAX:
+                self.brightness_max = 255
+
+        if self.custom_dp_color_temp:
+            self.dp_color_temp = self.custom_dp_color_temp
+        elif DP_MODERN_COLOR_TEMP in dps:
+            self.dp_color_temp = DP_MODERN_COLOR_TEMP
+        elif DP_LEGACY_COLOR_TEMP in dps:
+            self.dp_color_temp = DP_LEGACY_COLOR_TEMP
+            temp_val = dps.get(DP_LEGACY_COLOR_TEMP, 0)
+            if temp_val <= 255 and self.color_temp_max == DEFAULT_COLOR_TEMP_MAX:
+                self.color_temp_max = 255
+
+        if self.custom_dp_color:
+            self.dp_color = self.custom_dp_color
+        elif DP_MODERN_COLOR in dps:
+            self.dp_color = DP_MODERN_COLOR
+        elif DP_LEGACY_COLOR in dps:
+            self.dp_color = DP_LEGACY_COLOR
+
+        self.has_brightness = bool(self.dp_brightness in dps or self.custom_dp_brightness)
+        self.has_color_temp = bool(self.dp_color_temp in dps or self.custom_dp_color_temp)
+        self.has_color = bool(self.dp_color in dps or self.custom_dp_color)
 
         _LOGGER.info(
-            "Tuya lamp (%s) layout detected: Power=%s, Bright=%s (has=%s, max=%s), Temp=%s (has=%s), Color=%s (has=%s)",
+            "Tuya lamp (%s) configured: Power=%s, Bright=%s (min=%s, max=%s), Temp=%s (min=%s, max=%s, rev=%s), Color=%s (type=%s)",
             self.device_id,
             self.dp_power,
             self.dp_brightness,
-            self.has_brightness,
-            self.max_brightness_tuya,
+            self.brightness_min,
+            self.brightness_max,
             self.dp_color_temp,
-            self.has_color_temp,
+            self.color_temp_min,
+            self.color_temp_max,
+            self.color_temp_reverse,
             self.dp_color,
-            self.has_color,
+            self.color_type,
         )
         self._initialized = True
 
@@ -221,7 +284,6 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.error("Failed to send command to Tuya lamp (%s): %s", self.host, err)
                 raise
 
-            # Optimistic update: apply changes immediately to coordinator data
             if self.data and "dps" in self.data:
                 updated_dps = dict(self.data["dps"])
                 updated_dps.update(payload)

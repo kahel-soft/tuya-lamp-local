@@ -14,8 +14,28 @@ CONF_DEVICE_ID = "device_id"
 CONF_LOCAL_KEY = "local_key"
 CONF_PROTOCOL_VERSION = "protocol_version"
 CONF_POLL_INTERVAL = "poll_interval"
+
+# Granular DP (DataPoint) configuration keys
+CONF_DP_POWER = "dp_power"
+CONF_DP_MODE = "dp_mode"
+CONF_DP_BRIGHTNESS = "dp_brightness"
+CONF_BRIGHTNESS_MIN = "brightness_min"
+CONF_BRIGHTNESS_MAX = "brightness_max"
+
+CONF_DP_COLOR_TEMP = "dp_color_temp"
+CONF_COLOR_TEMP_MIN = "color_temp_min"
+CONF_COLOR_TEMP_MAX = "color_temp_max"
+CONF_COLOR_TEMP_REVERSE = "color_temp_reverse"
 CONF_MIN_KELVIN = "min_kelvin"
 CONF_MAX_KELVIN = "max_kelvin"
+
+CONF_DP_COLOR = "dp_color"
+CONF_COLOR_TYPE = "color_type"
+
+# Color formats
+COLOR_TYPE_HSV_HEX_12 = "hsv_hex_12"
+COLOR_TYPE_RGB_HEX_6 = "rgb_hex_6"
+COLOR_TYPES = [COLOR_TYPE_HSV_HEX_12, COLOR_TYPE_RGB_HEX_6]
 
 # Discovery & Import keys
 CONF_DISCOVERY_METHOD = "discovery_method"
@@ -43,15 +63,14 @@ TUYA_REGIONS = {
     "in": "India (in)",
 }
 
-# Optional DP Overrides (for exotic lamps)
-CONF_DP_POWER_OVERRIDE = "dp_power_override"
-CONF_DP_BRIGHT_OVERRIDE = "dp_bright_override"
-CONF_DP_TEMP_OVERRIDE = "dp_temp_override"
-CONF_DP_COLOR_OVERRIDE = "dp_color_override"
-
 DEFAULT_POLL_INTERVAL = 15
 DEFAULT_MIN_KELVIN = 2700
 DEFAULT_MAX_KELVIN = 6500
+
+DEFAULT_BRIGHTNESS_MIN = 10
+DEFAULT_BRIGHTNESS_MAX = 1000
+DEFAULT_COLOR_TEMP_MIN = 0
+DEFAULT_COLOR_TEMP_MAX = 1000
 
 # Protocols
 PROTOCOL_AUTO = "auto"
@@ -61,7 +80,7 @@ PROTOCOL_34 = "3.4"
 PROTOCOL_35 = "3.5"
 PROTOCOLS = [PROTOCOL_AUTO, PROTOCOL_33, PROTOCOL_34, PROTOCOL_35, PROTOCOL_31]
 
-# Datapoint schema definitions
+# Default Datapoint schema definitions
 # Modern DP layout (Type 20-24)
 DP_MODERN_POWER = "20"
 DP_MODERN_MODE = "21"
@@ -84,15 +103,15 @@ MODE_SCENE = "scene"
 MODE_MUSIC = "music"
 
 
-def ha_brightness_to_tuya(ha_val: int, min_tuya: int = 10, max_tuya: int = 1000) -> int:
-    """Convert Home Assistant brightness (1-255) to Tuya range (10-1000 or 10-255)."""
+def ha_brightness_to_tuya(ha_val: int, min_tuya: int = DEFAULT_BRIGHTNESS_MIN, max_tuya: int = DEFAULT_BRIGHTNESS_MAX) -> int:
+    """Convert Home Assistant brightness (1-255) to Tuya range."""
     if ha_val <= 0:
         return min_tuya
     ratio = max(0.0, min(1.0, ha_val / 255.0))
     return int(round(min_tuya + ratio * (max_tuya - min_tuya)))
 
 
-def tuya_brightness_to_ha(tuya_val: int, min_tuya: int = 10, max_tuya: int = 1000) -> int:
+def tuya_brightness_to_ha(tuya_val: int, min_tuya: int = DEFAULT_BRIGHTNESS_MIN, max_tuya: int = DEFAULT_BRIGHTNESS_MAX) -> int:
     """Convert Tuya brightness range to Home Assistant brightness (1-255)."""
     if tuya_val <= min_tuya:
         return 1
@@ -106,34 +125,47 @@ def ha_kelvin_to_tuya(
     kelvin: int,
     min_kelvin: int = DEFAULT_MIN_KELVIN,
     max_kelvin: int = DEFAULT_MAX_KELVIN,
-    max_tuya: int = 1000,
+    min_tuya: int = DEFAULT_COLOR_TEMP_MIN,
+    max_tuya: int = DEFAULT_COLOR_TEMP_MAX,
+    reverse: bool = False,
 ) -> int:
-    """Convert Home Assistant color temperature (Kelvin) to Tuya integer (0-1000)."""
+    """Convert Home Assistant color temperature (Kelvin) to Tuya integer."""
     clamped_k = max(min_kelvin, min(max_kelvin, kelvin))
-    ratio = (clamped_k - min_kelvin) / float(max_kelvin - min_kelvin)
-    return int(round(ratio * max_tuya))
+    if max_kelvin <= min_kelvin:
+        ratio = 0.0
+    else:
+        ratio = (clamped_k - min_kelvin) / float(max_kelvin - min_kelvin)
+    if reverse:
+        ratio = 1.0 - ratio
+    return int(round(min_tuya + ratio * (max_tuya - min_tuya)))
 
 
 def tuya_to_ha_kelvin(
     tuya_val: int,
     min_kelvin: int = DEFAULT_MIN_KELVIN,
     max_kelvin: int = DEFAULT_MAX_KELVIN,
-    max_tuya: int = 1000,
+    min_tuya: int = DEFAULT_COLOR_TEMP_MIN,
+    max_tuya: int = DEFAULT_COLOR_TEMP_MAX,
+    reverse: bool = False,
 ) -> int:
-    """Convert Tuya color temperature (0-1000) to Home Assistant Kelvin."""
-    clamped_tuya = max(0, min(max_tuya, tuya_val))
-    ratio = clamped_tuya / float(max_tuya)
+    """Convert Tuya color temperature to Home Assistant Kelvin."""
+    clamped_tuya = max(min_tuya, min(max_tuya, tuya_val))
+    if max_tuya <= min_tuya:
+        ratio = 0.0
+    else:
+        ratio = (clamped_tuya - min_tuya) / float(max_tuya - min_tuya)
+    if reverse:
+        ratio = 1.0 - ratio
     return int(round(min_kelvin + ratio * (max_kelvin - min_kelvin)))
 
 
 def ha_hs_to_tuya_hex(hs: tuple[float, float], brightness_ha: int = 255) -> str:
-    """Convert Home Assistant HS (hue 0-360, saturation 0-100) and brightness (1-255) to 12-char Tuya Hex (HHHHSSSSVVVV)."""
+    """Convert Home Assistant HS and brightness (1-255) to 12-char Tuya Hex (HHHHSSSSVVVV)."""
     hue, sat = hs
     h_int = int(round(hue)) % 360
     s_int = int(round((sat / 100.0) * 1000.0))
     v_int = int(round((brightness_ha / 255.0) * 1000.0))
 
-    # Clamp values
     s_int = max(0, min(1000, s_int))
     v_int = max(10, min(1000, v_int))
 
@@ -155,4 +187,23 @@ def tuya_hex_to_ha_hs(hex_str: str) -> tuple[tuple[float, float], int] | None:
         return ((hue, max(0.0, min(100.0, sat))), max(1, min(255, bright_ha)))
     except (ValueError, IndexError) as err:
         _LOGGER.warning("Could not parse Tuya HSV hex '%s': %s", hex_str, err)
+        return None
+
+
+def ha_rgb_to_tuya_hex(rgb: tuple[int, int, int]) -> str:
+    """Convert Home Assistant RGB tuple to 6-char hex string (RRGGBB)."""
+    r, g, b = rgb
+    return f"{r:02x}{g:02x}{b:02x}"
+
+
+def tuya_hex_to_ha_rgb(hex_str: str) -> tuple[int, int, int] | None:
+    """Parse 6-character hex string into RGB tuple."""
+    if not hex_str or len(hex_str) < 6:
+        return None
+    try:
+        r = int(hex_str[0:2], 16)
+        g = int(hex_str[2:4], 16)
+        b = int(hex_str[4:6], 16)
+        return (r, g, b)
+    except (ValueError, IndexError):
         return None

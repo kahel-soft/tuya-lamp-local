@@ -66,7 +66,7 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to the lamp. Please verify the IP address, Local Key, and ensure the lamp is powered on.",
-      "cannot_connect_server": "Connection failed. Ingress add-ons keep port 8000 disabled by default. Solution: Use 'Paste Raw JSON' (copy from the add-on) or enable port 8000 in the add-on settings under 'Configuration -> Network'.",
+      "cannot_connect_server": "Could not connect to the Tuya Local Key add-on URL. Ensure the add-on is running or use the 'Paste Raw JSON' method.",
       "no_data_provided": "Please paste the Raw JSON text.",
       "cloud_fetch_error": "Failed to fetch devices from Tuya Cloud. Please verify your Region, Client ID, Client Secret, and Device ID.",
       "no_devices_found": "No compatible devices were found in the response.",
@@ -81,19 +81,40 @@
   "options": {
     "step": {
       "init": {
-        "title": "Configure Tuya Local Lamp",
-        "description": "Adjust network parameters, polling intervals, or datapoint overrides.",
+        "title": "Configure Tuya Lamp",
+        "description": "Select the settings category you want to adjust.",
+        "menu_options": {
+          "network": "Network & Connection (IP, Key, Polling)",
+          "datapoints": "Data Points & Value Ranges (DPs, CCT, Color, Dimming)"
+        }
+      },
+      "network": {
+        "title": "Network & Connection Settings",
+        "description": "Update IP address, Local Key, protocol version or polling interval.",
         "data": {
           "host": "IP Address",
           "local_key": "Local Key",
           "protocol_version": "Protocol Version",
-          "poll_interval": "Polling Interval (Seconds)",
-          "min_kelvin": "Min Color Temp (Kelvin, e.g. 2700)",
-          "max_kelvin": "Max Color Temp (Kelvin, e.g. 6500)",
-          "dp_power_override": "Power DP Override (Leave blank for auto)",
-          "dp_bright_override": "Brightness DP Override (Leave blank for auto)",
-          "dp_temp_override": "Color Temp DP Override (Leave blank for auto)",
-          "dp_color_override": "Color DP Override (Leave blank for auto)"
+          "poll_interval": "Polling Interval (Seconds)"
+        }
+      },
+      "datapoints": {
+        "title": "Data Points & Scaling Parameters",
+        "description": "Currently reported live DPs:\n{detected_dps}\n\nConfigure custom DP mappings and scaling limits for this lamp.",
+        "data": {
+          "dp_power": "Power Switch DP",
+          "dp_brightness": "Brightness DP",
+          "brightness_min": "Min Brightness (Raw Tuya Value)",
+          "brightness_max": "Max Brightness (Raw Tuya Value)",
+          "dp_color_temp": "Color Temp DP (CCT)",
+          "color_temp_min": "Min Color Temp (Raw Tuya Value)",
+          "color_temp_max": "Max Color Temp (Raw Tuya Value)",
+          "color_temp_reverse": "Invert Color Temperature (Reverse Warm/Cool)",
+          "min_kelvin": "Min Kelvin",
+          "max_kelvin": "Max Kelvin",
+          "dp_color": "Color DP",
+          "color_type": "Color Format / Encoding",
+          "dp_mode": "Work Mode DP"
         }
       }
     },

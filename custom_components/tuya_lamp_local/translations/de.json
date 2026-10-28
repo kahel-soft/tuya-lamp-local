@@ -66,7 +66,7 @@
     },
     "error": {
       "cannot_connect": "Verbindung zur Lampe fehlgeschlagen. Bitte IP-Adresse, Local Key und Stromversorgung prüfen.",
-      "cannot_connect_server": "Verbindung fehlgeschlagen. Ingress-Add-ons haben Port 8000 standardmäßig deaktiviert. Lösung: Nutze im Menü 'Raw JSON einfügen' (aus dem Add-on kopieren) oder aktiviere Port 8000 in den Add-on-Einstellungen unter 'Konfiguration -> Netzwerk'.",
+      "cannot_connect_server": "Verbindung zum Tuya Local Key Add-on fehlgeschlagen. Läuft das Add-on? Alternativ kannst du die Methode 'Raw JSON einfügen' nutzen.",
       "no_data_provided": "Bitte füge den Raw JSON Text aus dem Add-on ein.",
       "cloud_fetch_error": "Geräteabruf aus der Tuya Cloud fehlgeschlagen. Bitte Region, Client ID, Secret und Device ID prüfen.",
       "no_devices_found": "Es wurden keine kompatiblen Geräte gefunden.",
@@ -82,18 +82,39 @@
     "step": {
       "init": {
         "title": "Tuya Lampe konfigurieren",
-        "description": "Passe Netzwerkdaten, Abfrageintervalle oder manuelle Datapoints an.",
+        "description": "Wähle den Bereich, den du bearbeiten möchtest.",
+        "menu_options": {
+          "network": "Netzwerk & Verbindung (IP, Key, Polling)",
+          "datapoints": "Datenpunkte & Grenzwerte (DPs, Helligkeit, CCT, Farben)"
+        }
+      },
+      "network": {
+        "title": "Netzwerk & Verbindungs-Einstellungen",
+        "description": "Passe IP-Adresse, Local Key, Protokollversion oder das Abfrageintervall an.",
         "data": {
           "host": "IP-Adresse",
           "local_key": "Lokaler Schlüssel (Local Key)",
           "protocol_version": "Protokollversion",
-          "poll_interval": "Abfrageintervall (Sekunden)",
-          "min_kelvin": "Minimale Farbtemperatur (Kelvin, Standard: 2700)",
-          "max_kelvin": "Maximale Farbtemperatur (Kelvin, Standard: 6500)",
-          "dp_power_override": "Power DP Override (Leer lassen für Auto-Erkennung)",
-          "dp_bright_override": "Helligkeits-DP Override (Leer lassen für Auto)",
-          "dp_temp_override": "Farbtemperatur-DP Override (Leer lassen für Auto)",
-          "dp_color_override": "Farben-DP Override (Leer lassen für Auto)"
+          "poll_interval": "Abfrageintervall (Sekunden)"
+        }
+      },
+      "datapoints": {
+        "title": "Datenpunkte & Skalierung (DPs)",
+        "description": "Aktuelle Live-Werte der Lampe:\n{detected_dps}\n\nPasse hier die Zuordnung der Datenpunkte und Grenzwerte für dieses Gerät an.",
+        "data": {
+          "dp_power": "Power / Ein-Aus-DP (z. B. 20 oder 1)",
+          "dp_brightness": "Helligkeits-DP (z. B. 22 oder 3)",
+          "brightness_min": "Minimale Helligkeit (Tuya-Rohwert, Standard: 10)",
+          "brightness_max": "Maximale Helligkeit (Tuya-Rohwert, Standard: 1000)",
+          "dp_color_temp": "Farbtemperatur-DP (CCT, z. B. 23 oder 4)",
+          "color_temp_min": "Min. Farbtemperatur (Tuya-Rohwert, Standard: 0)",
+          "color_temp_max": "Max. Farbtemperatur (Tuya-Rohwert, Standard: 1000)",
+          "color_temp_reverse": "Farbtemperatur umkehren (Warm/Kalt invertieren)",
+          "min_kelvin": "Min. Farbtemperatur in Kelvin (Standard: 2700)",
+          "max_kelvin": "Max. Farbtemperatur in Kelvin (Standard: 6500)",
+          "dp_color": "Farb-DP (z. B. 24 oder 5)",
+          "color_type": "Farb-Codierung (Format)",
+          "dp_mode": "Betriebsmodus-DP (z. B. 21 oder 2)"
         }
       }
     },

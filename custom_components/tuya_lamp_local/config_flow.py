@@ -15,16 +15,26 @@ import tinytuya
 import voluptuous as vol
 
 from .const import (
+    COLOR_TYPES,
+    COLOR_TYPE_HSV_HEX_12,
+    COLOR_TYPE_RGB_HEX_6,
     CONF_API_DEVICE_ID,
     CONF_API_KEY,
     CONF_API_REGION,
     CONF_API_SECRET,
+    CONF_BRIGHTNESS_MAX,
+    CONF_BRIGHTNESS_MIN,
+    CONF_COLOR_TEMP_MAX,
+    CONF_COLOR_TEMP_MIN,
+    CONF_COLOR_TEMP_REVERSE,
+    CONF_COLOR_TYPE,
     CONF_DEVICE_ID,
     CONF_DISCOVERY_METHOD,
-    CONF_DP_BRIGHT_OVERRIDE,
-    CONF_DP_COLOR_OVERRIDE,
-    CONF_DP_POWER_OVERRIDE,
-    CONF_DP_TEMP_OVERRIDE,
+    CONF_DP_BRIGHTNESS,
+    CONF_DP_COLOR,
+    CONF_DP_COLOR_TEMP,
+    CONF_DP_MODE,
+    CONF_DP_POWER,
     CONF_FILE_PATH,
     CONF_HOST,
     CONF_JSON_DATA,
@@ -36,6 +46,10 @@ from .const import (
     CONF_PROTOCOL_VERSION,
     CONF_SELECTED_DEVICE,
     CONF_SERVER_URL,
+    DEFAULT_BRIGHTNESS_MAX,
+    DEFAULT_BRIGHTNESS_MIN,
+    DEFAULT_COLOR_TEMP_MAX,
+    DEFAULT_COLOR_TEMP_MIN,
     DEFAULT_MAX_KELVIN,
     DEFAULT_MIN_KELVIN,
     DEFAULT_POLL_INTERVAL,
@@ -594,14 +608,21 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manage the options form."""
-        errors: dict[str, str] = {}
+        """Display options navigation menu."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["network", "datapoints"],
+        )
 
+    async def async_step_network(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage network and connection parameters."""
+        errors: dict[str, str] = {}
         data = self.config_entry.data
         opts = self.config_entry.options
 
         if user_input is not None:
-            # If IP, key or version changed, test connection
             test_data = {
                 CONF_HOST: user_input.get(CONF_HOST, opts.get(CONF_HOST, data.get(CONF_HOST))),
                 CONF_DEVICE_ID: data.get(CONF_DEVICE_ID),
@@ -621,7 +642,9 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
             if success:
                 if detected_version:
                     user_input[CONF_PROTOCOL_VERSION] = detected_version
-                return self.async_create_entry(title="", data=user_input)
+                new_opts = dict(self.config_entry.options)
+                new_opts.update(user_input)
+                return self.async_create_entry(title="", data=new_opts)
 
             errors["base"] = "cannot_connect"
 
@@ -633,19 +656,8 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
         current_poll = opts.get(
             CONF_POLL_INTERVAL, data.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
         )
-        current_min_k = opts.get(
-            CONF_MIN_KELVIN, data.get(CONF_MIN_KELVIN, DEFAULT_MIN_KELVIN)
-        )
-        current_max_k = opts.get(
-            CONF_MAX_KELVIN, data.get(CONF_MAX_KELVIN, DEFAULT_MAX_KELVIN)
-        )
 
-        current_dp_power = opts.get(CONF_DP_POWER_OVERRIDE, "")
-        current_dp_bright = opts.get(CONF_DP_BRIGHT_OVERRIDE, "")
-        current_dp_temp = opts.get(CONF_DP_TEMP_OVERRIDE, "")
-        current_dp_color = opts.get(CONF_DP_COLOR_OVERRIDE, "")
-
-        options_schema = vol.Schema(
+        network_schema = vol.Schema(
             {
                 vol.Required(CONF_HOST, default=current_host): str,
                 vol.Required(CONF_LOCAL_KEY, default=current_key): str,
@@ -653,21 +665,80 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(CONF_POLL_INTERVAL, default=current_poll): vol.All(
                     vol.Coerce(int), vol.Range(min=5, max=120)
                 ),
-                vol.Optional(CONF_MIN_KELVIN, default=current_min_k): vol.All(
-                    vol.Coerce(int), vol.Range(min=1500, max=4000)
-                ),
-                vol.Optional(CONF_MAX_KELVIN, default=current_max_k): vol.All(
-                    vol.Coerce(int), vol.Range(min=4000, max=9000)
-                ),
-                vol.Optional(CONF_DP_POWER_OVERRIDE, default=current_dp_power): str,
-                vol.Optional(CONF_DP_BRIGHT_OVERRIDE, default=current_dp_bright): str,
-                vol.Optional(CONF_DP_TEMP_OVERRIDE, default=current_dp_temp): str,
-                vol.Optional(CONF_DP_COLOR_OVERRIDE, default=current_dp_color): str,
             }
         )
 
         return self.async_show_form(
-            step_id="init",
-            data_schema=options_schema,
+            step_id="network",
+            data_schema=network_schema,
             errors=errors,
+        )
+
+    async def async_step_datapoints(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage granular Datapoint (DP) mapping and value ranges."""
+        data = self.config_entry.data
+        opts = self.config_entry.options
+
+        if user_input is not None:
+            new_opts = dict(self.config_entry.options)
+            new_opts.update(user_input)
+            return self.async_create_entry(title="", data=new_opts)
+
+        # Inspect current live DPs from the coordinator if available
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        live_dps = coordinator.data.get("dps", {}) if coordinator and coordinator.data else {}
+
+        if live_dps:
+            formatted_dps = " | ".join(
+                f"DP {k}: {v}"
+                for k, v in sorted(
+                    live_dps.items(),
+                    key=lambda x: int(x[0]) if x[0].isdigit() else str(x[0]),
+                )
+            )
+        else:
+            formatted_dps = "Keine Live-Daten verfügbar (Lampe eingeschaltet?)"
+
+        current_power = opts.get(CONF_DP_POWER, data.get(CONF_DP_POWER, "20"))
+        current_mode = opts.get(CONF_DP_MODE, data.get(CONF_DP_MODE, "21"))
+
+        current_bright = opts.get(CONF_DP_BRIGHTNESS, data.get(CONF_DP_BRIGHTNESS, "22"))
+        current_bright_min = opts.get(CONF_BRIGHTNESS_MIN, data.get(CONF_BRIGHTNESS_MIN, DEFAULT_BRIGHTNESS_MIN))
+        current_bright_max = opts.get(CONF_BRIGHTNESS_MAX, data.get(CONF_BRIGHTNESS_MAX, DEFAULT_BRIGHTNESS_MAX))
+
+        current_temp = opts.get(CONF_DP_COLOR_TEMP, data.get(CONF_DP_COLOR_TEMP, "23"))
+        current_temp_min = opts.get(CONF_COLOR_TEMP_MIN, data.get(CONF_COLOR_TEMP_MIN, DEFAULT_COLOR_TEMP_MIN))
+        current_temp_max = opts.get(CONF_COLOR_TEMP_MAX, data.get(CONF_COLOR_TEMP_MAX, DEFAULT_COLOR_TEMP_MAX))
+        current_temp_rev = opts.get(CONF_COLOR_TEMP_REVERSE, data.get(CONF_COLOR_TEMP_REVERSE, False))
+
+        current_min_k = opts.get(CONF_MIN_KELVIN, data.get(CONF_MIN_KELVIN, DEFAULT_MIN_KELVIN))
+        current_max_k = opts.get(CONF_MAX_KELVIN, data.get(CONF_MAX_KELVIN, DEFAULT_MAX_KELVIN))
+
+        current_color = opts.get(CONF_DP_COLOR, data.get(CONF_DP_COLOR, "24"))
+        current_color_type = opts.get(CONF_COLOR_TYPE, data.get(CONF_COLOR_TYPE, COLOR_TYPE_HSV_HEX_12))
+
+        dp_schema = vol.Schema(
+            {
+                vol.Required(CONF_DP_POWER, default=current_power): str,
+                vol.Optional(CONF_DP_BRIGHTNESS, default=current_bright): str,
+                vol.Optional(CONF_BRIGHTNESS_MIN, default=current_bright_min): vol.Coerce(int),
+                vol.Optional(CONF_BRIGHTNESS_MAX, default=current_bright_max): vol.Coerce(int),
+                vol.Optional(CONF_DP_COLOR_TEMP, default=current_temp): str,
+                vol.Optional(CONF_COLOR_TEMP_MIN, default=current_temp_min): vol.Coerce(int),
+                vol.Optional(CONF_COLOR_TEMP_MAX, default=current_temp_max): vol.Coerce(int),
+                vol.Optional(CONF_COLOR_TEMP_REVERSE, default=current_temp_rev): bool,
+                vol.Optional(CONF_MIN_KELVIN, default=current_min_k): vol.Coerce(int),
+                vol.Optional(CONF_MAX_KELVIN, default=current_max_k): vol.Coerce(int),
+                vol.Optional(CONF_DP_COLOR, default=current_color): str,
+                vol.Optional(CONF_COLOR_TYPE, default=current_color_type): vol.In(COLOR_TYPES),
+                vol.Optional(CONF_DP_MODE, default=current_mode): str,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="datapoints",
+            data_schema=dp_schema,
+            description_placeholders={"detected_dps": formatted_dps},
         )
