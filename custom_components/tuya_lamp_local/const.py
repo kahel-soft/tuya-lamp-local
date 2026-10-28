@@ -1,6 +1,7 @@
 """Constants and helper calculations for Tuya Local Lamp."""
 from __future__ import annotations
 
+import colorsys
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -244,3 +245,21 @@ def tuya_hex_to_ha_rgb(hex_str: str) -> tuple[int, int, int] | None:
         return (r, g, b)
     except (ValueError, IndexError):
         return None
+
+
+def ha_rgb_to_hs(rgb: tuple[int, int, int]) -> tuple[float, float]:
+    """Convert Home Assistant RGB tuple (0-255) to HS tuple ((0-360), (0-100))."""
+    r, g, b = [max(0, min(255, x)) / 255.0 for x in rgb]
+    h, s, _ = colorsys.rgb_to_hsv(r, g, b)
+    return (round(h * 360.0, 1), round(s * 100.0, 1))
+
+
+def ha_hs_to_rgb(hs: tuple[float, float], brightness_ha: int = 255) -> tuple[int, int, int]:
+    """Convert Home Assistant HS and brightness (1-255) to RGB tuple."""
+    hue, sat = hs
+    h = (hue % 360.0) / 360.0
+    s = max(0.0, min(100.0, sat)) / 100.0
+    v = max(0.0, min(255.0, brightness_ha)) / 255.0
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+    return (int(round(r * 255.0)), int(round(g * 255.0)), int(round(b * 255.0)))
+
