@@ -52,6 +52,7 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
 
     _attr_has_entity_name = True
     _attr_name = None
+    _attr_icon = "mdi:lightbulb-multiple"
 
     def __init__(self, coordinator: TuyaLampCoordinator, entry: ConfigEntry) -> None:
         """Initialize the light."""

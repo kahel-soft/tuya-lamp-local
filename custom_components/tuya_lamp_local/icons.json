@@ -1,0 +1,9 @@
+{
+  "entity": {
+    "light": {
+      "default": {
+        "default": "mdi:lightbulb-multiple"
+      }
+    }
+  }
+}
