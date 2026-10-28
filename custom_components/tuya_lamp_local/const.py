@@ -17,8 +17,9 @@ CONF_POLL_INTERVAL = "poll_interval"
 CONF_MIN_KELVIN = "min_kelvin"
 CONF_MAX_KELVIN = "max_kelvin"
 
-# Cloud & Import Discovery keys
+# Discovery & Import keys
 CONF_DISCOVERY_METHOD = "discovery_method"
+CONF_SERVER_URL = "server_url"
 CONF_API_REGION = "api_region"
 CONF_API_KEY = "api_key"
 CONF_API_SECRET = "api_secret"
@@ -27,8 +28,10 @@ CONF_JSON_DATA = "json_data"
 CONF_FILE_PATH = "file_path"
 CONF_SELECTED_DEVICE = "selected_device"
 
+DEFAULT_TUYA_LOCAL_KEY_URL = "http://localhost:8000"
+
+METHOD_TUYA_LOCAL_KEY = "tuya_local_key"
 METHOD_CLOUD = "cloud"
-METHOD_JSON = "json_import"
 METHOD_MANUAL = "manual"
 
 TUYA_REGIONS = {

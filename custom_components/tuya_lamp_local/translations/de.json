@@ -8,22 +8,23 @@
           "discovery_method": "Einrichtungs-Methode"
         }
       },
+      "tuya_local_key": {
+        "title": "Import aus 'Tuya Local Key' Add-on",
+        "description": "Verbinde dich direkt mit deinem laufenden Tuya Local Key Add-on (z. B. http://localhost:8000) ODER füge das Raw JSON direkt aus dem Add-on ein.",
+        "data": {
+          "json_data": "Raw JSON (Hier aus dem Tuya Local Key Add-on einfügen)",
+          "server_url": "Tuya Local Key Add-on Server-URL",
+          "file_path": "Dateipfad (Optional, z. B. /config/devices.json)"
+        }
+      },
       "cloud": {
-        "title": "Tuya Cloud / Local Key Schnittstelle",
-        "description": "Gib deine Tuya IoT API-Daten ein, um alle Geräte, Namen, IDs und Local Keys automatisch abzurufen.",
+        "title": "Tuya IoT Developer Cloud",
+        "description": "Gib deine offiziellen Tuya Cloud Entwickler-Zugangsdaten (iot.tuya.com) ein.",
         "data": {
           "api_region": "Rechenzentrum / Region",
           "api_key": "Access ID / Client ID",
           "api_secret": "Access Secret / Client Secret",
           "api_device_id": "Beliebige Geräte-ID aus deinem Tuya / Smart Life Konto"
-        }
-      },
-      "json_import": {
-        "title": "Import aus devices.json / JSON-Text",
-        "description": "Füge den Inhalt deiner devices.json ein oder gib einen Dateipfad auf deinem Home Assistant Server an.",
-        "data": {
-          "json_data": "JSON-Inhalt (Hier einfügen)",
-          "file_path": "Dateipfad (z. B. /config/devices.json)"
         }
       },
       "select_device": {
@@ -60,6 +61,8 @@
     },
     "error": {
       "cannot_connect": "Verbindung zur Lampe fehlgeschlagen. Bitte IP-Adresse, Local Key und Stromversorgung prüfen.",
+      "cannot_connect_server": "Verbindung zum Tuya Local Key Server fehlgeschlagen. Bitte Server-URL prüfen oder das JSON direkt hineinkopieren.",
+      "no_data_provided": "Bitte gib entweder eine Server-URL an oder füge das Raw JSON ein.",
       "cloud_fetch_error": "Geräteabruf aus der Tuya Cloud fehlgeschlagen. Bitte Region, Client ID, Secret und Device ID prüfen.",
       "no_devices_found": "Es wurden keine kompatiblen Geräte gefunden.",
       "invalid_json": "JSON-Daten fehlerhaft oder Datei nicht gefunden. Bitte Format prüfen.",

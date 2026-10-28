@@ -8,22 +8,23 @@
           "discovery_method": "Setup Method"
         }
       },
+      "tuya_local_key": {
+        "title": "Tuya Local Key Add-on Import",
+        "description": "Connect directly to the running Tuya Local Key add-on OR paste the Raw JSON from its web interface.",
+        "data": {
+          "json_data": "Raw JSON (Paste from Tuya Local Key Add-on here)",
+          "server_url": "Tuya Local Key Add-on URL (e.g. http://localhost:8000)",
+          "file_path": "File Path (Optional, e.g. /config/devices.json)"
+        }
+      },
       "cloud": {
-        "title": "Tuya Cloud / Local Key Interface",
-        "description": "Enter your Tuya IoT credentials to automatically fetch all devices, names, IDs, and Local Keys.",
+        "title": "Tuya IoT Developer Cloud",
+        "description": "Enter your official Tuya Developer Cloud credentials (iot.tuya.com) to query devices.",
         "data": {
           "api_region": "Data Center Region",
           "api_key": "Access ID / Client ID",
           "api_secret": "Access Secret / Client Secret",
           "api_device_id": "Any Device ID from your Tuya / Smart Life account"
-        }
-      },
-      "json_import": {
-        "title": "Import from devices.json",
-        "description": "Paste the content of your devices.json or provide a file path on your Home Assistant server.",
-        "data": {
-          "json_data": "JSON Data (Paste content here)",
-          "file_path": "File Path (e.g. /config/devices.json)"
         }
       },
       "select_device": {
@@ -60,6 +61,8 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to the lamp. Please verify the IP address, Local Key, and ensure the lamp is powered on.",
+      "cannot_connect_server": "Could not connect to the Tuya Local Key add-on URL. Please verify the server is running or paste the JSON directly.",
+      "no_data_provided": "Please enter a server URL or paste the Raw JSON.",
       "cloud_fetch_error": "Failed to fetch devices from Tuya Cloud. Please verify your Region, Client ID, Client Secret, and Device ID.",
       "no_devices_found": "No compatible devices were found in the response.",
       "invalid_json": "Could not parse JSON. Please check the formatting or file path.",

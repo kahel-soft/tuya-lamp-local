@@ -18,23 +18,20 @@ Eine leichtgewichtige, 100 % lokale Home Assistant Integration (`custom_componen
 
 ## ⚙️ Lampe in Home Assistant einbinden (Webinterface)
 
-Beim Klick auf **Einstellungen -> Geräte & Dienste -> Integration hinzufügen -> "Tuya Local Lamp"** kannst du zwischen 3 Methoden wählen:
+Beim Klick auf **Einstellungen -> Geräte & Dienste -> Integration hinzufügen -> "Tuya Local Lamp"** kannst du zwischen folgenden Methoden wählen:
 
-### 1. Methode: Tuya Cloud / Local Key Schnittstelle (Empfohlen & Automatisch)
-1. Gib deine Tuya IoT API-Zugangsdaten ein:
-   * **Region:** z. B. `Central Europe (eu)`
-   * **Client ID & Client Secret:** Aus dem Tuya IoT Developer Portal
-   * **Beliebige Geräte-ID:** Eine beliebige ID aus deiner Smart Life App
-2. Home Assistant ruft im Hintergrund alle Geräte, Namen und **Local Keys** ab und scannt zeitgleich das lokale WLAN nach deren IP-Adressen.
-3. Du erhältst eine **Auswahlliste aller gefundenen Lampen** (bereits hinzugefügte Lampen werden automatisch herausgefiltert).
-4. Wähle die gewünschte Lampe aus -> alle Felder (IP, ID, Key, Name) werden automatisch vorausgefüllt -> Klick auf **Absenden**. Fertig!
+### 1. Methode: Aus 'Tuya Local Key' Add-on (Empfohlen bei Nutzung des Add-ons)
+Wenn du das beliebte Home Assistant Add-on **Tuya Local Key** (von Vineet Choudhary / QR-Code Login) nutzt:
+* **Option A (Automatisch per Server-URL):** Gib die lokale URL des Add-ons ein (Standard ist `http://localhost:8000`). Die Integration ruft die Geräteliste direkt per API ab.
+* **Option B (Copy & Paste):** Öffne dein *Tuya Local Key* Add-on, klicke beim gewünschten Gerät (oder in der Detailansicht) auf **Raw JSON** / **Copy**, und füge den Text direkt in das Feld *Raw JSON* ein.
+* **Ergebnis:** Home Assistant erkennt sofort alle Lampen samt Name, Device ID und 16-stelligem **Local Key** und gleicht zeitgleich die WLAN-IPs ab. Du wählst die Lampe einfach aus der Liste aus!
 
-### 2. Methode: Import aus devices.json / JSON-Text
-Falls du bereits eine `devices.json` besitzt (z. B. aus dem `tinytuya wizard` oder dem beiliegenden `tuya_cloud_discover.py`):
-1. Füge den JSON-Inhalt ein oder gib den Dateipfad an (`/config/devices.json`).
-2. Home Assistant gleicht die IDs mit dem lokalen Netzwerk ab und zeigt dir die Übersicht zur Auswahl an.
+### 2. Methode: Tuya IoT Developer Cloud (iot.tuya.com)
+Falls du ein Entwicklerkonto auf `iot.tuya.com` nutzt:
+* Trage Region (`Central Europe`), Client ID, Client Secret und eine Geräte-ID ein.
+* Home Assistant holt die Schlüssel direkt über die Tuya Cloud API ab.
 
-### 3. Methode: Manuelle Eingabe
+### 3. Methode: Manuelle Direkteingabe
 Direkte Eingabe von Name, IP, Device ID und Local Key für einzelne Lampen.
 
 ### 4. Nachträgliches Anpassen (Options Flow)

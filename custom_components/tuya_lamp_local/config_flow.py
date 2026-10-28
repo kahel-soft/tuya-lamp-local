@@ -5,6 +5,7 @@ import json
 import logging
 import os
 from typing import Any
+import urllib.request
 
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -34,13 +35,15 @@ from .const import (
     CONF_POLL_INTERVAL,
     CONF_PROTOCOL_VERSION,
     CONF_SELECTED_DEVICE,
+    CONF_SERVER_URL,
     DEFAULT_MAX_KELVIN,
     DEFAULT_MIN_KELVIN,
     DEFAULT_POLL_INTERVAL,
+    DEFAULT_TUYA_LOCAL_KEY_URL,
     DOMAIN,
     METHOD_CLOUD,
-    METHOD_JSON,
     METHOD_MANUAL,
+    METHOD_TUYA_LOCAL_KEY,
     PROTOCOL_AUTO,
     PROTOCOLS,
     TUYA_REGIONS,
@@ -130,7 +133,7 @@ def _parse_devices_json(raw_text: str, file_path: str = "") -> list[dict[str, An
             content = f.read().strip()
 
     if not content:
-        raise ValueError("No JSON data provided or file not found")
+        raise ValueError("Keine JSON-Daten angegeben oder Datei nicht gefunden")
 
     data = json.loads(content)
     raw_list: list[dict[str, Any]] = []
@@ -149,19 +152,35 @@ def _parse_devices_json(raw_text: str, file_path: str = "") -> list[dict[str, An
     for item in raw_list:
         if not isinstance(item, dict):
             continue
-        dev_id = item.get("id") or item.get("gwId") or item.get("device_id")
-        key = item.get("local_key") or item.get("key")
+        dev_id = (
+            item.get("id")
+            or item.get("gwId")
+            or item.get("device_id")
+            or item.get("deviceId")
+            or item.get("devId")
+        )
+        key = (
+            item.get("local_key")
+            or item.get("key")
+            or item.get("localKey")
+            or item.get("localkey")
+        )
         if not dev_id or not key:
             continue
 
-        name = item.get("name") or f"Tuya Lamp {str(dev_id)[-6:]}"
-        ip = item.get("ip") or item.get("address", "")
-        version = str(item.get("version", PROTOCOL_AUTO))
+        name = (
+            item.get("name")
+            or item.get("product_name")
+            or item.get("productName")
+            or f"Tuya Lamp {str(dev_id)[-6:]}"
+        )
+        ip = item.get("ip") or item.get("address") or item.get("local_ip", "")
+        version = str(item.get("version") or item.get("protocol_version") or PROTOCOL_AUTO)
         category = item.get("category", "")
 
         normalized.append(
             {
-                "name": name,
+                "name": str(name),
                 "id": str(dev_id),
                 "key": str(key),
                 "ip": str(ip),
@@ -170,6 +189,38 @@ def _parse_devices_json(raw_text: str, file_path: str = "") -> list[dict[str, An
             }
         )
     return normalized
+
+
+def _fetch_from_tuya_local_key_server(server_url: str) -> list[dict[str, Any]]:
+    """Fetch devices JSON from running Tuya Local Key add-on/server."""
+    server_url = server_url.strip().rstrip("/")
+    if not server_url.startswith("http://") and not server_url.startswith("https://"):
+        server_url = f"http://{server_url}"
+
+    endpoints = [
+        f"{server_url}/api/devices",
+        f"{server_url}/devices",
+        f"{server_url}/api/v1/devices",
+        server_url,
+    ]
+
+    last_error = None
+    for url in endpoints:
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"Accept": "application/json", "User-Agent": "HomeAssistant-TuyaLamp"},
+            )
+            with urllib.request.urlopen(req, timeout=4) as response:
+                content = response.read().decode("utf-8")
+                parsed = _parse_devices_json(content)
+                if parsed:
+                    return parsed
+        except Exception as err:
+            last_error = err
+            continue
+
+    raise Exception(f"Verbindung zu {server_url} fehlgeschlagen: {last_error}")
 
 
 class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -196,21 +247,21 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial mode selection step."""
         if user_input is not None:
             method = user_input.get(CONF_DISCOVERY_METHOD)
+            if method == METHOD_TUYA_LOCAL_KEY:
+                return await self.async_step_tuya_local_key()
             if method == METHOD_CLOUD:
                 return await self.async_step_cloud()
-            if method == METHOD_JSON:
-                return await self.async_step_json_import()
             return await self.async_step_manual()
 
         methods = {
-            METHOD_CLOUD: "Tuya Cloud / Local Key Schnittstelle (Automatisch abrufen)",
-            METHOD_JSON: "Import aus devices.json / JSON-Text",
-            METHOD_MANUAL: "Manuelle Eingabe (IP, ID, Local Key direkt eingeben)",
+            METHOD_TUYA_LOCAL_KEY: "Aus 'Tuya Local Key' Add-on (Server-URL oder Raw JSON)",
+            METHOD_CLOUD: "Tuya IoT Developer Cloud (API Key & Secret)",
+            METHOD_MANUAL: "Manuelle Direkteingabe (IP, ID, Local Key)",
         }
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_DISCOVERY_METHOD, default=METHOD_CLOUD): vol.In(methods),
+                vol.Required(CONF_DISCOVERY_METHOD, default=METHOD_TUYA_LOCAL_KEY): vol.In(methods),
             }
         )
 
@@ -219,10 +270,79 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=schema,
         )
 
+    async def async_step_tuya_local_key(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Step to fetch from Tuya Local Key Add-on or paste its Raw JSON."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            raw_json = user_input.get(CONF_JSON_DATA, "").strip()
+            server_url = user_input.get(CONF_SERVER_URL, "").strip()
+            file_path = user_input.get(CONF_FILE_PATH, "").strip()
+
+            parsed_list: list[dict[str, Any]] = []
+
+            # 1. If JSON was pasted directly, parse it first
+            if raw_json or (file_path and os.path.exists(file_path)):
+                try:
+                    parsed_list = _parse_devices_json(raw_json, file_path)
+                except Exception as err:
+                    _LOGGER.error("JSON parsing error: %s", err)
+                    errors["base"] = "invalid_json"
+
+            # 2. Otherwise try fetching from server URL
+            elif server_url:
+                try:
+                    parsed_list = await self.hass.async_add_executor_job(
+                        _fetch_from_tuya_local_key_server, server_url
+                    )
+                except Exception as err:
+                    _LOGGER.warning("Could not fetch from server %s: %s", server_url, err)
+                    errors["base"] = "cannot_connect_server"
+            else:
+                errors["base"] = "no_data_provided"
+
+            if parsed_list:
+                # Match with LAN scan for current IP addresses
+                lan_mapping = await self.hass.async_add_executor_job(_sync_scan_lan)
+
+                self._discovered_devices = {}
+                for dev in parsed_list:
+                    dev_id = dev["id"]
+                    lan_info = lan_mapping.get(dev_id, {})
+                    if not dev["ip"] and lan_info.get("ip"):
+                        dev["ip"] = lan_info["ip"]
+                    if dev["version"] == PROTOCOL_AUTO and lan_info.get("version"):
+                        dev["version"] = lan_info["version"]
+
+                    self._discovered_devices[dev_id] = dev
+
+                if not self._discovered_devices:
+                    errors["base"] = "no_devices_found"
+                else:
+                    return await self.async_step_select_device()
+
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_JSON_DATA, default=""): str,
+                vol.Optional(
+                    CONF_SERVER_URL, default=DEFAULT_TUYA_LOCAL_KEY_URL
+                ): str,
+                vol.Optional(CONF_FILE_PATH, default=""): str,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="tuya_local_key",
+            data_schema=schema,
+            errors=errors,
+        )
+
     async def async_step_cloud(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Step to query Tuya Cloud API for devices and local keys."""
+        """Step to query official Tuya Cloud API for devices and local keys."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -286,55 +406,6 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_json_import(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Step to import devices from JSON or devices.json."""
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            raw_json = user_input.get(CONF_JSON_DATA, "").strip()
-            file_path = user_input.get(CONF_FILE_PATH, "").strip()
-
-            try:
-                parsed_list = _parse_devices_json(raw_json, file_path)
-
-                # Match with LAN scan
-                lan_mapping = await self.hass.async_add_executor_job(_sync_scan_lan)
-
-                self._discovered_devices = {}
-                for dev in parsed_list:
-                    dev_id = dev["id"]
-                    lan_info = lan_mapping.get(dev_id, {})
-                    if not dev["ip"] and lan_info.get("ip"):
-                        dev["ip"] = lan_info["ip"]
-                    if dev["version"] == PROTOCOL_AUTO and lan_info.get("version"):
-                        dev["version"] = lan_info["version"]
-
-                    self._discovered_devices[dev_id] = dev
-
-                if not self._discovered_devices:
-                    errors["base"] = "no_devices_found"
-                else:
-                    return await self.async_step_select_device()
-
-            except Exception as err:
-                _LOGGER.error("Failed to parse JSON device data: %s", err)
-                errors["base"] = "invalid_json"
-
-        schema = vol.Schema(
-            {
-                vol.Optional(CONF_JSON_DATA, default=""): str,
-                vol.Optional(CONF_FILE_PATH, default="/config/devices.json"): str,
-            }
-        )
-
-        return self.async_show_form(
-            step_id="json_import",
-            data_schema=schema,
-            errors=errors,
-        )
-
     async def async_step_select_device(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -359,7 +430,7 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         choices = {}
         for d_id, info in available_devices.items():
             name = info.get("name", "Tuya Lamp")
-            ip = info.get("ip") or "IP unbekannt"
+            ip = info.get("ip") or "IP suchen"
             cat = f" [{info['category']}]" if info.get("category") else ""
             choices[d_id] = f"{name} ({ip} | ID: {d_id[-6:]}){cat}"
 
