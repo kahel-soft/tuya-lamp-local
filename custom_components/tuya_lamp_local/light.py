@@ -499,24 +499,15 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
 
     @property
     def brightness(self) -> int | None:
-        """Return current brightness of the auxiliary light (1-255)."""
+        """Return the current brightness of the auxiliary light (1-255)."""
         if not self.coordinator.has_aux_brightness and not self.coordinator.has_aux_color:
             return None
 
         current_mode = self._get_dp(self.coordinator.dp_aux_mode, MODE_WHITE)
 
-        # In white mode: always read from aux_brightness if present
-        if current_mode == MODE_WHITE and self.coordinator.has_aux_brightness:
-            val = self._get_dp(self.coordinator.dp_aux_brightness)
-            if val is not None:
-                return tuya_brightness_to_ha(
-                    int(val),
-                    min_tuya=self.coordinator.aux_brightness_min,
-                    max_tuya=self.coordinator.aux_brightness_max,
-                )
-
-        # In colour mode: check HSV V-value first (since color brightness is in DP 105), fallback to aux_brightness
-        if current_mode == MODE_COLOUR and self.coordinator.has_aux_color:
+        # In color mode with HSV hex, brightness is encoded in the V component.
+        # Also use HSV value if no separate white brightness DP is available.
+        if (current_mode == MODE_COLOUR or not self._get_dp(self.coordinator.dp_aux_brightness)) and self.coordinator.has_aux_color and self.coordinator.color_type != COLOR_TYPE_RGB_HEX_6:
             hex_data = str(self._get_dp(self.coordinator.dp_aux_color, ""))
             parsed = tuya_hex_to_ha_hs(hex_data)
             if parsed is not None:
@@ -524,53 +515,47 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
                 return bright_ha
 
         val = self._get_dp(self.coordinator.dp_aux_brightness)
-        if val is not None and int(val) > 0:
-            return tuya_brightness_to_ha(
-                int(val),
-                min_tuya=self.coordinator.aux_brightness_min,
-                max_tuya=self.coordinator.aux_brightness_max,
-            )
-
-        if self.coordinator.has_aux_color:
-            hex_data = str(self._get_dp(self.coordinator.dp_aux_color, ""))
-            parsed = tuya_hex_to_ha_hs(hex_data)
-            if parsed is not None:
-                _, bright_ha = parsed
-                return bright_ha
-
-        return None
+        if val is None:
+            return None
+        return tuya_brightness_to_ha(
+            val,
+            min_tuya=self.coordinator.aux_brightness_min,
+            max_tuya=self.coordinator.aux_brightness_max,
+        )
 
     @property
     def hs_color(self) -> tuple[float, float] | None:
-        """Return current HS color of the auxiliary light."""
+        """Return the current HS color tuple of the auxiliary light."""
         if not self.coordinator.has_aux_color:
             return None
 
-        current_mode = self._get_dp(self.coordinator.dp_aux_mode, MODE_WHITE)
-        if current_mode == MODE_WHITE:
-            return (0.0, 0.0)
-
         hex_data = str(self._get_dp(self.coordinator.dp_aux_color, ""))
+        if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
+            rgb = tuya_hex_to_ha_rgb(hex_data)
+            if rgb is not None:
+                return ha_rgb_to_hs(rgb)
+            return None
+
         parsed = tuya_hex_to_ha_hs(hex_data)
         if parsed is not None:
             hs, _ = parsed
             return hs
-        return (0.0, 0.0)
+        return None
 
     @property
     def rgb_color(self) -> tuple[int, int, int] | None:
-        """Return current RGB color tuple of the auxiliary light."""
+        """Return the current RGB color tuple of the auxiliary light."""
         if not self.coordinator.has_aux_color:
             return None
 
-        current_mode = self._get_dp(self.coordinator.dp_aux_mode, MODE_WHITE)
-        if current_mode == MODE_WHITE:
-            return (255, 255, 255)
+        hex_data = str(self._get_dp(self.coordinator.dp_aux_color, ""))
+        if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
+            return tuya_hex_to_ha_rgb(hex_data)
 
         if self.hs_color is not None:
             return ha_hs_to_rgb(self.hs_color, brightness_ha=self.brightness or 255)
 
-        return (255, 255, 255)
+        return None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the auxiliary light on with requested parameters."""
@@ -580,78 +565,45 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if self.coordinator.dp_master_power:
             payload[self.coordinator.dp_master_power] = True
 
-        # 1. Dedicated White Mode (ATTR_WHITE from HA service call)
+        # Handle Dedicated White Mode (ATTR_WHITE)
         if ATTR_WHITE in kwargs:
             white_bright = kwargs[ATTR_WHITE]
-            if self.coordinator.dp_aux_mode:
-                payload[self.coordinator.dp_aux_mode] = MODE_WHITE
             if self.coordinator.dp_aux_brightness:
                 payload[self.coordinator.dp_aux_brightness] = ha_brightness_to_tuya(
                     white_bright,
                     min_tuya=self.coordinator.aux_brightness_min,
                     max_tuya=self.coordinator.aux_brightness_max,
                 )
+            if self.coordinator.dp_aux_mode:
+                payload[self.coordinator.dp_aux_mode] = MODE_WHITE
 
-        # 2. Color Mode (RGB)
+        # Handle Color (RGB)
         elif ATTR_RGB_COLOR in kwargs and self.coordinator.has_aux_color:
             rgb = kwargs[ATTR_RGB_COLOR]
             bright = kwargs.get(ATTR_BRIGHTNESS, self.brightness or 255)
-
-            # If user selects pure white (r == g == b) on the color wheel:
-            # seamlessly switch to the real white LEDs!
-            if rgb[0] == rgb[1] == rgb[2] and (self.coordinator.has_aux_brightness or self.coordinator.dp_aux_mode):
-                if self.coordinator.dp_aux_mode:
-                    payload[self.coordinator.dp_aux_mode] = MODE_WHITE
-                if self.coordinator.dp_aux_brightness:
-                    payload[self.coordinator.dp_aux_brightness] = ha_brightness_to_tuya(
-                        bright,
-                        min_tuya=self.coordinator.aux_brightness_min,
-                        max_tuya=self.coordinator.aux_brightness_max,
-                    )
+            if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
+                hex_str = ha_rgb_to_tuya_hex(rgb)
             else:
                 hs = ha_rgb_to_hs(rgb)
                 hex_str = ha_hs_to_tuya_hex(hs, brightness_ha=bright)
-                if self.coordinator.dp_aux_color:
-                    payload[self.coordinator.dp_aux_color] = hex_str
-                if self.coordinator.dp_aux_mode:
-                    payload[self.coordinator.dp_aux_mode] = MODE_COLOUR
-                if self.coordinator.dp_aux_brightness:
-                    payload[self.coordinator.dp_aux_brightness] = ha_brightness_to_tuya(
-                        bright,
-                        min_tuya=self.coordinator.aux_brightness_min,
-                        max_tuya=self.coordinator.aux_brightness_max,
-                    )
+            payload[self.coordinator.dp_aux_color] = hex_str
+            if self.coordinator.dp_aux_mode:
+                payload[self.coordinator.dp_aux_mode] = MODE_COLOUR
 
-        # 3. Color Mode (HS)
+        # Handle Color (HS)
         elif ATTR_HS_COLOR in kwargs and self.coordinator.has_aux_color:
             hs = kwargs[ATTR_HS_COLOR]
             bright = kwargs.get(ATTR_BRIGHTNESS, self.brightness or 255)
-
-            # If user selects pure white (saturation == 0) on the color wheel:
-            # seamlessly switch to the real white LEDs!
-            if hs[1] == 0 and (self.coordinator.has_aux_brightness or self.coordinator.dp_aux_mode):
-                if self.coordinator.dp_aux_mode:
-                    payload[self.coordinator.dp_aux_mode] = MODE_WHITE
-                if self.coordinator.dp_aux_brightness:
-                    payload[self.coordinator.dp_aux_brightness] = ha_brightness_to_tuya(
-                        bright,
-                        min_tuya=self.coordinator.aux_brightness_min,
-                        max_tuya=self.coordinator.aux_brightness_max,
-                    )
+            if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
+                rgb = ha_hs_to_rgb(hs, brightness_ha=bright)
+                hex_str = ha_rgb_to_tuya_hex(rgb)
             else:
                 hex_str = ha_hs_to_tuya_hex(hs, brightness_ha=bright)
-                if self.coordinator.dp_aux_color:
-                    payload[self.coordinator.dp_aux_color] = hex_str
-                if self.coordinator.dp_aux_mode:
-                    payload[self.coordinator.dp_aux_mode] = MODE_COLOUR
-                if self.coordinator.dp_aux_brightness:
-                    payload[self.coordinator.dp_aux_brightness] = ha_brightness_to_tuya(
-                        bright,
-                        min_tuya=self.coordinator.aux_brightness_min,
-                        max_tuya=self.coordinator.aux_brightness_max,
-                    )
+            payload[self.coordinator.dp_aux_color] = hex_str
+            if self.coordinator.dp_aux_mode:
+                payload[self.coordinator.dp_aux_mode] = MODE_COLOUR
 
-        # 4. Color Temperature (Kelvin) if supported
+        # Handle Color Temperature (Kelvin)
         elif ATTR_COLOR_TEMP_KELVIN in kwargs and self.coordinator.has_aux_color_temp:
             kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
             tuya_temp = ha_kelvin_to_tuya(
@@ -665,6 +617,7 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
             payload[self.coordinator.dp_aux_color_temp] = tuya_temp
             if self.coordinator.dp_aux_mode:
                 payload[self.coordinator.dp_aux_mode] = MODE_WHITE
+
             if ATTR_BRIGHTNESS in kwargs and self.coordinator.has_aux_brightness:
                 bright = kwargs[ATTR_BRIGHTNESS]
                 payload[self.coordinator.dp_aux_brightness] = ha_brightness_to_tuya(
@@ -673,37 +626,23 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
                     max_tuya=self.coordinator.aux_brightness_max,
                 )
 
-        # 5. Brightness only (maintaining current mode)
+        # Handle Brightness only
         elif ATTR_BRIGHTNESS in kwargs:
             bright = kwargs[ATTR_BRIGHTNESS]
             current_mode = self._get_dp(self.coordinator.dp_aux_mode, MODE_WHITE)
 
-            if current_mode == MODE_WHITE or not self.coordinator.has_aux_color:
-                if self.coordinator.dp_aux_brightness:
-                    payload[self.coordinator.dp_aux_brightness] = ha_brightness_to_tuya(
-                        bright,
-                        min_tuya=self.coordinator.aux_brightness_min,
-                        max_tuya=self.coordinator.aux_brightness_max,
-                    )
+            if current_mode == MODE_COLOUR and self.coordinator.has_aux_color and self.coordinator.color_type != COLOR_TYPE_RGB_HEX_6:
+                active_hs = self.hs_color or (0.0, 0.0)
+                hex_str = ha_hs_to_tuya_hex(active_hs, brightness_ha=bright)
+                payload[self.coordinator.dp_aux_color] = hex_str
+            elif self.coordinator.has_aux_brightness:
+                payload[self.coordinator.dp_aux_brightness] = ha_brightness_to_tuya(
+                    bright,
+                    min_tuya=self.coordinator.aux_brightness_min,
+                    max_tuya=self.coordinator.aux_brightness_max,
+                )
                 if self.coordinator.dp_aux_mode:
                     payload[self.coordinator.dp_aux_mode] = MODE_WHITE
-            else:
-                # In colour mode
-                if self.coordinator.has_aux_color:
-                    active_hs = self.hs_color
-                    if not active_hs or active_hs == (0.0, 0.0):
-                        active_hs = (0.0, 100.0)
-                    hex_str = ha_hs_to_tuya_hex(active_hs, brightness_ha=bright)
-                    if self.coordinator.dp_aux_color:
-                        payload[self.coordinator.dp_aux_color] = hex_str
-                if self.coordinator.dp_aux_brightness:
-                    payload[self.coordinator.dp_aux_brightness] = ha_brightness_to_tuya(
-                        bright,
-                        min_tuya=self.coordinator.aux_brightness_min,
-                        max_tuya=self.coordinator.aux_brightness_max,
-                    )
-                if self.coordinator.dp_aux_mode:
-                    payload[self.coordinator.dp_aux_mode] = MODE_COLOUR
 
         await self.coordinator.async_send_dps(payload)
 
