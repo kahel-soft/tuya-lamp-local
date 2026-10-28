@@ -14,6 +14,7 @@ from homeassistant.components.light import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -44,6 +45,22 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Tuya Local Lamp light platform."""
     coordinator: TuyaLampCoordinator = hass.data[DOMAIN][entry.entry_id]
+
+    ent_reg = er.async_get(hass)
+    old_light_uid = f"{coordinator.device_id}_light"
+    old_entity_id = ent_reg.async_get_entity_id("light", DOMAIN, old_light_uid)
+
+    # If the device is classified as a socket/switch, do not create light entities
+    if not coordinator.is_light:
+        if old_entity_id:
+            _LOGGER.info(
+                "Device %s is recognized as a socket/switch (%s). Removing legacy light entity %s",
+                coordinator.device_id,
+                coordinator.category or "switch",
+                old_entity_id,
+            )
+            ent_reg.async_remove(old_entity_id)
+        return
 
     known_unique_ids: set[str] = set()
 

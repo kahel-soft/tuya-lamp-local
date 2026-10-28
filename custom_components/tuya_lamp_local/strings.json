@@ -89,12 +89,12 @@
         "menu_options": {
           "network": "Network & Connection (IP, Key, Polling)",
           "datapoints": "Data Points & Value Ranges (DPs, CCT, Color, Dimming)",
-          "rescan": "Rescan Light Sources & Live DPs (Detects secondary lights)"
+          "rescan": "Rescan Device Type, Outlets & Live DPs"
         }
       },
       "rescan": {
-        "title": "Rescan & Update Light Sources",
-        "description": "Live status query completed!\n\n**Detected light sources:** {light_sources}\n\n**Reported live DPs:**\n{dps_summary}\n\nClick Submit to apply updates and automatically register any newly detected light sources.",
+        "title": "Rescan & Update Device",
+        "description": "Live status query completed!\n\n**Device Type:** {device_type}\n**Entities / Channels:** {light_sources}\n\n**Reported live DPs:**\n{dps_summary}\n\nClick Submit to apply updates and automatically register or update entities.",
         "data": {}
       },
       "network": {
@@ -111,6 +111,7 @@
         "title": "Data Points & Scaling Parameters",
         "description": "Currently reported live DPs:\n{detected_dps}\n\nConfigure custom DP mappings and scaling limits for this lamp.",
         "data": {
+          "device_type": "Device Type (auto = automatic, light = Lamp, switch = Socket / Plug)",
           "dp_power": "Power Switch DP",
           "dp_brightness": "Brightness DP",
           "brightness_min": "Min Brightness (Raw Tuya Value)",

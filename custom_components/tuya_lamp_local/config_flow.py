@@ -22,6 +22,8 @@ import tinytuya
 import voluptuous as vol
 
 from .const import (
+    CATEGORY_LIGHTS,
+    CATEGORY_SOCKETS,
     COLOR_TYPES,
     COLOR_TYPE_HSV_HEX_12,
     COLOR_TYPE_RGB_HEX_6,
@@ -31,11 +33,13 @@ from .const import (
     CONF_API_SECRET,
     CONF_BRIGHTNESS_MAX,
     CONF_BRIGHTNESS_MIN,
+    CONF_CATEGORY,
     CONF_COLOR_TEMP_MAX,
     CONF_COLOR_TEMP_MIN,
     CONF_COLOR_TEMP_REVERSE,
     CONF_COLOR_TYPE,
     CONF_DEVICE_ID,
+    CONF_DEVICE_TYPE,
     CONF_DISCOVERY_METHOD,
     CONF_DP_BRIGHTNESS,
     CONF_DP_COLOR,
@@ -66,6 +70,8 @@ from .const import (
     DEFAULT_MIN_KELVIN,
     DEFAULT_POLL_INTERVAL,
     DEFAULT_TUYA_LOCAL_KEY_URL,
+    DEVICE_TYPE_AUTO,
+    DEVICE_TYPES,
     DOMAIN,
     METHOD_CACHED,
     METHOD_CLOUD,
@@ -417,15 +423,20 @@ def _parse_devices_json(raw_text: str, file_path: str = "") -> list[dict[str, An
         if not dev_id or not key:
             continue
 
+        category = str(item.get("category", "")).lower().strip()
+        default_name = (
+            f"Tuya Steckdose {str(dev_id)[-6:]}"
+            if category in CATEGORY_SOCKETS
+            else f"Tuya Lamp {str(dev_id)[-6:]}"
+        )
         name = (
             item.get("name")
             or item.get("product_name")
             or item.get("productName")
-            or f"Tuya Lamp {str(dev_id)[-6:]}"
+            or default_name
         )
         ip = _extract_device_ip(item)
         version = str(item.get("version") or item.get("protocol_version") or PROTOCOL_AUTO)
-        category = item.get("category", "")
 
         normalized.append(
             {
@@ -699,10 +710,15 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     local_key = str(dev.get("local_key") or dev.get("key") or "")
                     if not dev_id or not local_key:
                         continue
-                    name = dev.get("name") or f"Tuya Lamp {dev_id[-6:]}"
+                    category = str(dev.get("category", "")).lower().strip()
+                    default_name = (
+                        f"Tuya Steckdose {dev_id[-6:]}"
+                        if category in CATEGORY_SOCKETS
+                        else f"Tuya Lamp {dev_id[-6:]}"
+                    )
+                    name = dev.get("name") or default_name
                     ip = _extract_device_ip(dev)
                     vers = dev.get("version", PROTOCOL_AUTO)
-                    category = dev.get("category", "")
                     parsed_list.append(
                         {
                             "name": name,
@@ -788,10 +804,22 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         choices = {}
         for d_id, info in available_devices.items():
-            name = info.get("name", "Tuya Lamp")
+            name = info.get("name", "Tuya Device")
             ip = info.get("ip") or "IP suchen"
-            cat = f" [{info['category']}]" if info.get("category") else ""
-            choices[d_id] = f"{name} ({ip} | ID: {d_id[-6:]}){cat}"
+            cat = str(info.get("category", "")).lower().strip()
+            if cat in CATEGORY_SOCKETS:
+                type_badge = " [🔌 Steckdose]"
+            elif cat in CATEGORY_LIGHTS:
+                type_badge = " [💡 Lampe]"
+            elif any(w in name.lower() for w in ["steckdose", "socket", "plug", "outlet", "stecker"]):
+                type_badge = " [🔌 Steckdose]"
+            elif any(w in name.lower() for w in ["lampe", "lamp", "light", "leuchte", "birne", "bulb"]):
+                type_badge = " [💡 Lampe]"
+            elif cat:
+                type_badge = f" [{cat}]"
+            else:
+                type_badge = ""
+            choices[d_id] = f"{name} ({ip} | ID: {d_id[-6:]}){type_badge}"
 
         schema = vol.Schema(
             {
@@ -830,6 +858,7 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_LOCAL_KEY: dev.get("key", "").strip(),
                 CONF_PROTOCOL_VERSION: dev.get("version", PROTOCOL_AUTO),
                 CONF_POLL_INTERVAL: DEFAULT_POLL_INTERVAL,
+                CONF_CATEGORY: dev.get("category", ""),
             }
             self.hass.async_create_task(
                 self.hass.config_entries.flow.async_init(
@@ -842,6 +871,7 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Create entry for the first device in this flow
         first_name = first_dev.get("name", "").strip()
         first_host = first_dev.get("ip", "").strip()
+        first_cat = first_dev.get("category", "")
         await self.async_set_unique_id(first_id)
         self._abort_if_unique_id_configured()
 
@@ -852,8 +882,10 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_LOCAL_KEY: first_dev.get("key", "").strip(),
             CONF_PROTOCOL_VERSION: first_dev.get("version", PROTOCOL_AUTO),
             CONF_POLL_INTERVAL: DEFAULT_POLL_INTERVAL,
+            CONF_CATEGORY: first_cat,
         }
-        title = first_name if first_name else f"Tuya Lamp ({first_host})"
+        fallback_prefix = "Tuya Steckdose" if first_cat in CATEGORY_SOCKETS else "Tuya Lamp"
+        title = first_name if first_name else f"{fallback_prefix} ({first_host})"
         return self.async_create_entry(title=title, data=first_data)
 
     async def async_step_import(self, import_data: dict[str, Any]) -> FlowResult:
@@ -864,7 +896,9 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         custom_name = import_data.get(CONF_NAME, "").strip()
         dev_host = import_data.get(CONF_HOST, "").strip()
-        title = custom_name if custom_name else f"Tuya Lamp ({dev_host})"
+        cat = import_data.get(CONF_CATEGORY, "")
+        fallback_prefix = "Tuya Steckdose" if cat in CATEGORY_SOCKETS else "Tuya Lamp"
+        title = custom_name if custom_name else f"{fallback_prefix} ({dev_host})"
         return self.async_create_entry(title=title, data=import_data)
 
     async def async_step_confirm_device(
@@ -879,6 +913,7 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input[CONF_HOST] = user_input[CONF_HOST].strip()
             user_input[CONF_DEVICE_ID] = device_id
             user_input[CONF_LOCAL_KEY] = user_input[CONF_LOCAL_KEY].strip()
+            user_input[CONF_CATEGORY] = dev.get("category", "")
 
             await self.async_set_unique_id(device_id)
             self._abort_if_unique_id_configured(updates=user_input)
@@ -893,7 +928,9 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     user_input[CONF_PROTOCOL_VERSION] = detected_version
 
                 custom_name = user_input.get(CONF_NAME, "").strip()
-                title = custom_name if custom_name else f"Tuya Lamp ({user_input[CONF_HOST]})"
+                cat = dev.get("category", "")
+                fallback_prefix = "Tuya Steckdose" if cat in CATEGORY_SOCKETS else "Tuya Lamp"
+                title = custom_name if custom_name else f"{fallback_prefix} ({user_input[CONF_HOST]})"
                 return self.async_create_entry(title=title, data=user_input)
 
             errors["base"] = "cannot_connect"
@@ -1003,9 +1040,14 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
             _LOGGER.error("Rescan failed for device %s: %s", coordinator.device_id, err)
             return self.async_abort(reason="cannot_connect")
 
-        sources = ["Hauptlicht (Main Light)"]
-        if coordinator.has_aux_light:
-            sources.append("Sockel / Base (Zusatzlicht - DP 102/103/105)")
+        if coordinator.is_switch:
+            dev_type_str = "Steckdose / Smart Plug" if coordinator.is_socket else "Schalter / Switch"
+            sources = [f"{label} (DP {dp})" for dp, label in coordinator.switch_dps.items()]
+        else:
+            dev_type_str = "Lampe / Lighting"
+            sources = ["Hauptlicht (Main Light)"]
+            if coordinator.has_aux_light:
+                sources.append("Sockel / Base (Zusatzlicht - DP 102/103/105)")
 
         dps_summary = " | ".join(
             f"DP {k}: {v}"
@@ -1019,6 +1061,7 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
             step_id="rescan",
             data_schema=vol.Schema({}),
             description_placeholders={
+                "device_type": dev_type_str,
                 "light_sources": ", ".join(sources),
                 "dps_summary": dps_summary,
             },
@@ -1146,8 +1189,11 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
             data.get(CONF_DP_AUX_MODE, "106" if coordinator and coordinator.has_aux_light else ""),
         )
 
+        current_dev_type = opts.get(CONF_DEVICE_TYPE, data.get(CONF_DEVICE_TYPE, DEVICE_TYPE_AUTO))
+
         dp_schema = vol.Schema(
             {
+                vol.Optional(CONF_DEVICE_TYPE, default=current_dev_type): vol.In(DEVICE_TYPES),
                 vol.Required(CONF_DP_POWER, default=current_power): str,
                 vol.Optional(CONF_DP_BRIGHTNESS, default=current_bright): str,
                 vol.Optional(CONF_BRIGHTNESS_MIN, default=current_bright_min): vol.Coerce(int),

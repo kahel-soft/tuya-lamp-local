@@ -32,6 +32,19 @@ CONF_MAX_KELVIN = "max_kelvin"
 CONF_DP_COLOR = "dp_color"
 CONF_COLOR_TYPE = "color_type"
 
+# Device categorization & type overrides
+CONF_CATEGORY = "category"
+CONF_DEVICE_TYPE = "device_type"
+
+DEVICE_TYPE_AUTO = "auto"
+DEVICE_TYPE_LIGHT = "light"
+DEVICE_TYPE_SWITCH = "switch"
+DEVICE_TYPES = [DEVICE_TYPE_AUTO, DEVICE_TYPE_LIGHT, DEVICE_TYPE_SWITCH]
+
+# Tuya device category codes
+CATEGORY_SOCKETS = {"cz", "pc", "wk", "kg", "dlq", "tdq"}
+CATEGORY_LIGHTS = {"dj", "dd", "xdd", "dc", "tyndj", "sbd", "fwd", "tgq"}
+
 # Multi-light / Secondary (Aux / Base / Sockel) DP keys
 CONF_DP_MAIN_POWER = "dp_main_power"
 CONF_DP_AUX_POWER = "dp_aux_power"

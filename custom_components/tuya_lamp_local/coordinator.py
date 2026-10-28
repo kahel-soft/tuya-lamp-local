@@ -11,17 +11,21 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 import tinytuya
 
 from .const import (
+    CATEGORY_LIGHTS,
+    CATEGORY_SOCKETS,
     COLOR_TYPE_HSV_HEX_12,
     COLOR_TYPE_RGB_HEX_6,
     CONF_AUX_BRIGHTNESS_MAX,
     CONF_AUX_BRIGHTNESS_MIN,
     CONF_BRIGHTNESS_MAX,
     CONF_BRIGHTNESS_MIN,
+    CONF_CATEGORY,
     CONF_COLOR_TEMP_MAX,
     CONF_COLOR_TEMP_MIN,
     CONF_COLOR_TEMP_REVERSE,
     CONF_COLOR_TYPE,
     CONF_DEVICE_ID,
+    CONF_DEVICE_TYPE,
     CONF_DP_AUX_BRIGHTNESS,
     CONF_DP_AUX_COLOR,
     CONF_DP_AUX_COLOR_TEMP,
@@ -48,6 +52,9 @@ from .const import (
     DEFAULT_MAX_KELVIN,
     DEFAULT_MIN_KELVIN,
     DEFAULT_POLL_INTERVAL,
+    DEVICE_TYPE_AUTO,
+    DEVICE_TYPE_LIGHT,
+    DEVICE_TYPE_SWITCH,
     DOMAIN,
     DP_AUX_BRIGHTNESS,
     DP_AUX_COLOR,
@@ -149,6 +156,14 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             opts.get(CONF_COLOR_TYPE, data.get(CONF_COLOR_TYPE, COLOR_TYPE_HSV_HEX_12))
         )
 
+        # Device categorization (Sockets / Switches vs Lights)
+        self.category: str = str(opts.get(CONF_CATEGORY, data.get(CONF_CATEGORY, ""))).strip().lower()
+        self.configured_device_type: str = str(
+            opts.get(CONF_DEVICE_TYPE, data.get(CONF_DEVICE_TYPE, DEVICE_TYPE_AUTO))
+        ).strip().lower()
+        self.device_type: str = DEVICE_TYPE_LIGHT  # Auto-detected in _detect_datapoint_layout
+        self.switch_dps: dict[str, str] = {}
+
         # Socket lock: Tuya devices only allow 1 concurrent connection
         self._lock = asyncio.Lock()
         self._device: tinytuya.BulbDevice | None = None
@@ -184,6 +199,26 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name=f"{DOMAIN}_{self.device_id}",
             update_interval=timedelta(seconds=max(5, poll_interval)),
         )
+
+    @property
+    def is_light(self) -> bool:
+        """Return True if device is classified as a light."""
+        return self.device_type == DEVICE_TYPE_LIGHT
+
+    @property
+    def is_switch(self) -> bool:
+        """Return True if device is classified as a switch or socket."""
+        return self.device_type == DEVICE_TYPE_SWITCH
+
+    @property
+    def is_socket(self) -> bool:
+        """Return True if switch entity represents a smart socket / plug."""
+        if not self.is_switch:
+            return False
+        if self.category in CATEGORY_SOCKETS:
+            return True
+        name_lower = (self.entry.title or "").lower()
+        return any(w in name_lower for w in ["steck", "socket", "plug", "outlet"]) or not self.category
 
     def _get_device(self) -> tinytuya.BulbDevice:
         """Get or initialize the TinyTuya BulbDevice instance."""
@@ -240,8 +275,81 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return data
 
     def _detect_datapoint_layout(self, dps: dict[str, Any]) -> None:
-        """Inspect DPS dictionary to identify lamp capabilities and layout."""
-        # 1. Main light switch & Master hardware switch
+        """Inspect DPS dictionary to identify device type (Light vs Switch/Socket) and layout."""
+        # 1. Determine device classification (Light vs Switch/Socket)
+        if self.configured_device_type == DEVICE_TYPE_SWITCH:
+            self.device_type = DEVICE_TYPE_SWITCH
+        elif self.configured_device_type == DEVICE_TYPE_LIGHT:
+            self.device_type = DEVICE_TYPE_LIGHT
+        else:
+            # Auto-detection
+            if self.category in CATEGORY_SOCKETS:
+                self.device_type = DEVICE_TYPE_SWITCH
+            elif self.category in CATEGORY_LIGHTS:
+                self.device_type = DEVICE_TYPE_LIGHT
+            else:
+                title_lower = (self.entry.title or "").lower()
+                if any(w in title_lower for w in ["steckdose", "socket", "plug", "outlet", "power strip", "stecker"]):
+                    self.device_type = DEVICE_TYPE_SWITCH
+                elif any(w in title_lower for w in ["lampe", "lamp", "light", "leuchte", "birne", "bulb", "stripe", "strip"]):
+                    self.device_type = DEVICE_TYPE_LIGHT
+                else:
+                    # Check for presence of lighting-specific DPs
+                    has_light_features = False
+                    if "21" in dps and isinstance(dps["21"], str) and dps["21"] in ("white", "colour", "scene", "music"):
+                        has_light_features = True
+                    elif "24" in dps and isinstance(dps["24"], str) and len(dps["24"]) >= 6:
+                        has_light_features = True
+                    elif "20" in dps and isinstance(dps["20"], bool) and ("22" in dps or "23" in dps):
+                        has_light_features = True
+                    elif "101" in dps or "102" in dps or "103" in dps or "105" in dps:
+                        has_light_features = True
+                    elif "1" in dps and isinstance(dps["1"], bool) and ("3" in dps or "4" in dps or "5" in dps):
+                        has_light_features = True
+
+                    self.device_type = DEVICE_TYPE_LIGHT if has_light_features else DEVICE_TYPE_SWITCH
+
+        # Handle Switch / Socket devices
+        if self.device_type == DEVICE_TYPE_SWITCH:
+            self.switch_dps = {}
+            if self.custom_dp_power:
+                self.switch_dps[self.custom_dp_power] = "Steckdose"
+                self.dp_power = self.custom_dp_power
+            else:
+                # Check for socket relays (e.g. 1..7)
+                found_switches = []
+                for candidate in ["1", "2", "3", "4", "5", "6", "7"]:
+                    if candidate in dps and isinstance(dps[candidate], bool):
+                        found_switches.append(candidate)
+
+                if found_switches:
+                    if len(found_switches) == 1:
+                        self.switch_dps[found_switches[0]] = "Steckdose"
+                    else:
+                        for s_id in found_switches:
+                            if s_id == "7":
+                                self.switch_dps[s_id] = "USB"
+                            else:
+                                self.switch_dps[s_id] = f"Steckdose {s_id}"
+                    self.dp_power = found_switches[0]
+                elif "20" in dps and isinstance(dps["20"], bool):
+                    self.switch_dps["20"] = "Steckdose"
+                    self.dp_power = "20"
+                else:
+                    self.switch_dps["1"] = "Steckdose"
+                    self.dp_power = "1"
+
+            _LOGGER.info(
+                "Tuya device (%s) configured as %s (Category=%s): Switch DPs=%s",
+                self.device_id,
+                "Steckdose / Socket" if self.is_socket else "Switch",
+                self.category,
+                self.switch_dps,
+            )
+            self._initialized = True
+            return
+
+        # 2. Main light switch & Master hardware switch (for Light devices)
         if self.custom_dp_power:
             self.dp_power = self.custom_dp_power
             self.dp_master_power = None
