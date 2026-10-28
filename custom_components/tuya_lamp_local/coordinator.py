@@ -244,9 +244,22 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _sync_fetch_status(self) -> dict[str, Any]:
         """Synchronously query device status via TinyTuya (runs in executor)."""
         device = self._get_device()
-        data = device.status()
+        try:
+            data = device.status()
+        except Exception as err:
+            try:
+                device.close()
+            except Exception:
+                pass
+            self._device = None
+            raise UpdateFailed(f"Device communication failed ({self.host}): {err}") from err
 
         if not isinstance(data, dict):
+            try:
+                device.close()
+            except Exception:
+                pass
+            self._device = None
             raise UpdateFailed(f"Invalid response from Tuya device: {data}")
 
         if "Error" in data:
@@ -257,8 +270,15 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         candidate_version,
                         self.device_id,
                     )
+                    try:
+                        device.close()
+                    except Exception:
+                        pass
                     device.set_version(candidate_version)
-                    data = device.status()
+                    try:
+                        data = device.status()
+                    except Exception:
+                        continue
                     if isinstance(data, dict) and "dps" in data:
                         _LOGGER.info(
                             "Discovered working protocol %s for device %s",
@@ -270,6 +290,11 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if "dps" not in data:
             error_msg = data.get("Error", "No DPS data returned")
+            try:
+                device.close()
+            except Exception:
+                pass
+            self._device = None
             raise UpdateFailed(f"Device communication failed ({self.host}): {error_msg}")
 
         # Normalize DPS dictionary keys to strings
@@ -481,6 +506,12 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 data = await self.hass.async_add_executor_job(self._sync_fetch_status)
             except Exception as err:
+                if self._device is not None:
+                    try:
+                        self._device.close()
+                    except Exception:
+                        pass
+                    self._device = None
                 raise UpdateFailed(f"Error communicating with Tuya lamp ({self.host}): {err}") from err
 
             dps = data.get("dps", {})
@@ -491,9 +522,27 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return data
 
     def _sync_send_dps(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Synchronously send DP payload to Tuya device."""
+        """Synchronously send DP payload to Tuya device with auto-reconnect."""
         device = self._get_device()
-        result = device.set_multiple_values(payload)
+        try:
+            result = device.set_multiple_values(payload)
+        except Exception as err:
+            _LOGGER.debug("Socket error during command send to %s: %s; retrying with fresh connection", self.host, err)
+            result = {"Error": str(err)}
+
+        if isinstance(result, dict) and "Error" in result:
+            # Stale connection recovery: close and retry once with fresh connection
+            try:
+                device.close()
+            except Exception:
+                pass
+            self._device = None
+            device = self._get_device()
+            try:
+                result = device.set_multiple_values(payload)
+            except Exception as err:
+                _LOGGER.warning("Retry command send to %s failed: %s", self.host, err)
+                raise
         return result
 
     async def async_send_dps(self, payload: dict[str, Any]) -> None:

@@ -31,6 +31,7 @@ from .const import (
     ha_kelvin_to_tuya,
     ha_rgb_to_hs,
     ha_rgb_to_tuya_hex,
+    to_bool,
     tuya_brightness_to_ha,
     tuya_hex_to_ha_hs,
     tuya_hex_to_ha_rgb,
@@ -150,9 +151,9 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
     @property
     def is_on(self) -> bool:
         """Return True if the main light is on."""
-        power_on = bool(self._get_dp(self.coordinator.dp_power, False))
+        power_on = to_bool(self._get_dp(self.coordinator.dp_power, False))
         if self.coordinator.dp_master_power:
-            master_on = bool(self._get_dp(self.coordinator.dp_master_power, True))
+            master_on = to_bool(self._get_dp(self.coordinator.dp_master_power, True))
             return power_on and master_on
         return power_on
 
@@ -361,7 +362,7 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         """Turn the main lamp off."""
         payload: dict[str, Any] = {self.coordinator.dp_power: False}
         if self.coordinator.dp_master_power and self.coordinator.has_aux_light:
-            aux_is_on = bool(self._get_dp(self.coordinator.dp_aux_power, False))
+            aux_is_on = to_bool(self._get_dp(self.coordinator.dp_aux_power, False))
             if not aux_is_on:
                 payload[self.coordinator.dp_master_power] = False
         await self.coordinator.async_send_dps(payload)
@@ -409,11 +410,39 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         return default
 
     @property
+    def min_color_temp_kelvin(self) -> int:
+        """Return minimum supported color temperature in Kelvin."""
+        return self.coordinator.min_kelvin
+
+    @property
+    def max_color_temp_kelvin(self) -> int:
+        """Return maximum supported color temperature in Kelvin."""
+        return self.coordinator.max_kelvin
+
+    @property
+    def color_temp_kelvin(self) -> int | None:
+        """Return current color temperature in Kelvin of the auxiliary light."""
+        if not self.coordinator.has_aux_color_temp:
+            return None
+
+        val = self._get_dp(self.coordinator.dp_aux_color_temp)
+        if val is None:
+            return None
+        return tuya_to_ha_kelvin(
+            val,
+            min_kelvin=self.coordinator.min_kelvin,
+            max_kelvin=self.coordinator.max_kelvin,
+            min_tuya=self.coordinator.color_temp_min,
+            max_tuya=self.coordinator.color_temp_max,
+            reverse=self.coordinator.color_temp_reverse,
+        )
+
+    @property
     def is_on(self) -> bool:
         """Return True if the auxiliary light is on."""
-        aux_on = bool(self._get_dp(self.coordinator.dp_aux_power, False))
+        aux_on = to_bool(self._get_dp(self.coordinator.dp_aux_power, False))
         if self.coordinator.dp_master_power:
-            master_on = bool(self._get_dp(self.coordinator.dp_master_power, True))
+            master_on = to_bool(self._get_dp(self.coordinator.dp_master_power, True))
             return aux_on and master_on
         return aux_on
 
@@ -423,7 +452,10 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         modes: set[ColorMode] = set()
 
         if self.coordinator.has_aux_color:
-            modes.add(ColorMode.HS)
+            if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
+                modes.add(ColorMode.RGB)
+            else:
+                modes.add(ColorMode.HS)
 
         if self.coordinator.has_aux_color_temp:
             modes.add(ColorMode.COLOR_TEMP)
@@ -445,18 +477,21 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
 
         current_mode = self._get_dp(self.coordinator.dp_aux_mode, MODE_WHITE)
 
-        if current_mode == MODE_COLOUR and ColorMode.HS in supported:
-            return ColorMode.HS
+        if current_mode == MODE_COLOUR:
+            if ColorMode.RGB in supported:
+                return ColorMode.RGB
+            if ColorMode.HS in supported:
+                return ColorMode.HS
 
         if current_mode == MODE_WHITE and ColorMode.COLOR_TEMP in supported and self._get_dp(self.coordinator.dp_aux_color_temp) is not None:
             return ColorMode.COLOR_TEMP
 
         if ColorMode.HS in supported:
             return ColorMode.HS
-
+        if ColorMode.RGB in supported:
+            return ColorMode.RGB
         if ColorMode.COLOR_TEMP in supported:
             return ColorMode.COLOR_TEMP
-
         if ColorMode.BRIGHTNESS in supported:
             return ColorMode.BRIGHTNESS
 
@@ -676,7 +711,7 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         """Turn the auxiliary light off."""
         payload: dict[str, Any] = {self.coordinator.dp_aux_power: False}
         if self.coordinator.dp_master_power:
-            main_is_on = bool(self._get_dp(self.coordinator.dp_power, False))
+            main_is_on = to_bool(self._get_dp(self.coordinator.dp_power, False))
             if not main_is_on:
                 payload[self.coordinator.dp_master_power] = False
         await self.coordinator.async_send_dps(payload)

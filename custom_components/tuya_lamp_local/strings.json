@@ -67,6 +67,7 @@
       }
     },
     "error": {
+      "host_required": "Please enter the local IP address of the lamp.",
       "no_device_selected": "Please select at least one device.",
       "cannot_connect": "Failed to connect to the lamp. Please verify the IP address, Local Key, and ensure the lamp is powered on.",
       "cannot_connect_server": "Could not connect to the Tuya Local Key add-on URL. Ensure the add-on is running or use the 'Paste Raw JSON' method.",
@@ -128,6 +129,7 @@
           "dp_aux_power": "Aux / Secondary Light Switch DP (e.g. 102)",
           "dp_aux_brightness": "Aux / Secondary Light Brightness DP (e.g. 103)",
           "dp_aux_color": "Aux / Secondary Light Color DP (e.g. 105)",
+          "dp_aux_color_temp": "Aux / Secondary Light Color Temp DP (CCT, e.g. 104)",
           "dp_aux_mode": "Aux / Secondary Light Mode DP (e.g. 106)"
         }
       }

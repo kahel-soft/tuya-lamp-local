@@ -49,6 +49,7 @@ from .const import (
     CONF_DP_AUX_POWER,
     CONF_DP_AUX_BRIGHTNESS,
     CONF_DP_AUX_COLOR,
+    CONF_DP_AUX_COLOR_TEMP,
     CONF_DP_AUX_MODE,
     CONF_FILE_PATH,
     CONF_HOST,
@@ -910,30 +911,34 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             device_id = user_input[CONF_DEVICE_ID].strip()
-            user_input[CONF_HOST] = user_input[CONF_HOST].strip()
+            host = user_input[CONF_HOST].strip()
+            user_input[CONF_HOST] = host
             user_input[CONF_DEVICE_ID] = device_id
             user_input[CONF_LOCAL_KEY] = user_input[CONF_LOCAL_KEY].strip()
             user_input[CONF_CATEGORY] = dev.get("category", "")
 
-            await self.async_set_unique_id(device_id)
-            self._abort_if_unique_id_configured(updates=user_input)
+            if not host:
+                errors[CONF_HOST] = "host_required"
+            else:
+                await self.async_set_unique_id(device_id)
+                self._abort_if_unique_id_configured(updates=user_input)
 
-            # Test connection
-            success, detected_version, _ = await self.hass.async_add_executor_job(
-                _validate_connection, user_input
-            )
+                # Test connection
+                success, detected_version, _ = await self.hass.async_add_executor_job(
+                    _validate_connection, user_input
+                )
 
-            if success:
-                if detected_version:
-                    user_input[CONF_PROTOCOL_VERSION] = detected_version
+                if success:
+                    if detected_version:
+                        user_input[CONF_PROTOCOL_VERSION] = detected_version
 
-                custom_name = user_input.get(CONF_NAME, "").strip()
-                cat = dev.get("category", "")
-                fallback_prefix = "Tuya Steckdose" if cat in CATEGORY_SOCKETS else "Tuya Lamp"
-                title = custom_name if custom_name else f"{fallback_prefix} ({user_input[CONF_HOST]})"
-                return self.async_create_entry(title=title, data=user_input)
+                    custom_name = user_input.get(CONF_NAME, "").strip()
+                    cat = dev.get("category", "")
+                    fallback_prefix = "Tuya Steckdose" if cat in CATEGORY_SOCKETS else "Tuya Lamp"
+                    title = custom_name if custom_name else f"{fallback_prefix} ({user_input[CONF_HOST]})"
+                    return self.async_create_entry(title=title, data=user_input)
 
-            errors["base"] = "cannot_connect"
+                errors["base"] = "cannot_connect"
 
         schema = vol.Schema(
             {
@@ -1034,12 +1039,12 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
                     new_opts[CONF_DP_AUX_BRIGHTNESS] = coordinator.dp_aux_brightness
                 if coordinator.dp_aux_color:
                     new_opts[CONF_DP_AUX_COLOR] = coordinator.dp_aux_color
+                if coordinator.dp_aux_color_temp:
+                    new_opts[CONF_DP_AUX_COLOR_TEMP] = coordinator.dp_aux_color_temp
                 if coordinator.dp_aux_mode:
                     new_opts[CONF_DP_AUX_MODE] = coordinator.dp_aux_mode
                 if coordinator.dp_master_power:
                     new_opts[CONF_DP_POWER] = coordinator.dp_power
-            # Force reload of entry which re-initializes platforms and adds newly detected entities
-            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
             return self.async_create_entry(title="", data=new_opts)
 
         try:
@@ -1219,6 +1224,13 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
                 coordinator.dp_aux_color if coordinator and coordinator.has_aux_light else ("105" if "105" in live_dps else ""),
             ),
         )
+        current_aux_temp = opts.get(
+            CONF_DP_AUX_COLOR_TEMP,
+            data.get(
+                CONF_DP_AUX_COLOR_TEMP,
+                coordinator.dp_aux_color_temp if coordinator and coordinator.has_aux_light else ("104" if "104" in live_dps else ""),
+            ),
+        )
         current_aux_mode = opts.get(
             CONF_DP_AUX_MODE,
             data.get(
@@ -1248,6 +1260,7 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(CONF_DP_AUX_POWER, default=current_aux_power): str,
                 vol.Optional(CONF_DP_AUX_BRIGHTNESS, default=current_aux_bright): str,
                 vol.Optional(CONF_DP_AUX_COLOR, default=current_aux_color): str,
+                vol.Optional(CONF_DP_AUX_COLOR_TEMP, default=current_aux_temp): str,
                 vol.Optional(CONF_DP_AUX_MODE, default=current_aux_mode): str,
             }
         )

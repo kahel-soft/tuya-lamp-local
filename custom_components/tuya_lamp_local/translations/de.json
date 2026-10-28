@@ -67,6 +67,7 @@
       }
     },
     "error": {
+      "host_required": "Bitte gib die lokale IP-Adresse der Lampe ein.",
       "no_device_selected": "Bitte wähle mindestens ein Gerät aus.",
       "cannot_connect": "Verbindung zur Lampe fehlgeschlagen. Bitte IP-Adresse, Local Key und Stromversorgung prüfen.",
       "cannot_connect_server": "Verbindung zum Tuya Local Key Add-on fehlgeschlagen. Läuft das Add-on? Alternativ kannst du die Methode 'Raw JSON einfügen' nutzen.",
@@ -128,6 +129,7 @@
           "dp_aux_power": "Zusatzlicht / Sockel Power-DP (z. B. 102)",
           "dp_aux_brightness": "Zusatzlicht / Sockel Helligkeits-DP (z. B. 103)",
           "dp_aux_color": "Zusatzlicht / Sockel Farb-DP (z. B. 105)",
+          "dp_aux_color_temp": "Zusatzlicht / Sockel Farbtemperatur-DP (CCT, z. B. 104)",
           "dp_aux_mode": "Zusatzlicht / Sockel Modus-DP (z. B. 106)"
         }
       }

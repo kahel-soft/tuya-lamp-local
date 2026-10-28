@@ -15,7 +15,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, to_bool
 from .coordinator import TuyaLampCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -121,7 +121,7 @@ class TuyaLocalSwitch(CoordinatorEntity[TuyaLampCoordinator], SwitchEntity):
         """Return True if the socket/switch is on."""
         dps = self.coordinator.data.get("dps", {}) if self.coordinator.data else {}
         val = dps.get(self.dp_id, dps.get(int(self.dp_id) if str(self.dp_id).isdigit() else None, False))
-        return bool(val)
+        return to_bool(val, default=False)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the socket/switch on."""

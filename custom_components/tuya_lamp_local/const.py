@@ -141,26 +141,63 @@ MODE_SCENE = "scene"
 MODE_MUSIC = "music"
 
 
-def ha_brightness_to_tuya(ha_val: int, min_tuya: int = DEFAULT_BRIGHTNESS_MIN, max_tuya: int = DEFAULT_BRIGHTNESS_MAX) -> int:
+def to_bool(val: Any, default: bool = False) -> bool:
+    """Safely convert boolean, integer, or string representation to a boolean."""
+    if val is None:
+        return default
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return val != 0
+    if isinstance(val, str):
+        v = val.strip().lower()
+        if v in ("true", "1", "on", "yes", "t"):
+            return True
+        if v in ("false", "0", "off", "no", "f", ""):
+            return False
+    return default
+
+
+def ha_brightness_to_tuya(
+    ha_val: int | float | None,
+    min_tuya: int = DEFAULT_BRIGHTNESS_MIN,
+    max_tuya: int = DEFAULT_BRIGHTNESS_MAX,
+) -> int:
     """Convert Home Assistant brightness (1-255) to Tuya range."""
-    if ha_val <= 0:
+    if ha_val is None or ha_val <= 0:
         return min_tuya
-    ratio = max(0.0, min(1.0, ha_val / 255.0))
+    try:
+        val = float(ha_val)
+    except (ValueError, TypeError):
+        return min_tuya
+    ratio = max(0.0, min(1.0, val / 255.0))
     return int(round(min_tuya + ratio * (max_tuya - min_tuya)))
 
 
-def tuya_brightness_to_ha(tuya_val: int, min_tuya: int = DEFAULT_BRIGHTNESS_MIN, max_tuya: int = DEFAULT_BRIGHTNESS_MAX) -> int:
+def tuya_brightness_to_ha(
+    tuya_val: int | str | None,
+    min_tuya: int = DEFAULT_BRIGHTNESS_MIN,
+    max_tuya: int = DEFAULT_BRIGHTNESS_MAX,
+) -> int:
     """Convert Tuya brightness range to Home Assistant brightness (1-255)."""
-    if tuya_val <= min_tuya:
+    if tuya_val is None:
         return 1
-    if tuya_val >= max_tuya:
+    try:
+        val = int(tuya_val)
+    except (ValueError, TypeError):
+        return 1
+    if max_tuya <= min_tuya:
+        return 255 if val >= max_tuya else 1
+    if val <= min_tuya:
+        return 1
+    if val >= max_tuya:
         return 255
-    ratio = (tuya_val - min_tuya) / float(max_tuya - min_tuya)
+    ratio = (val - min_tuya) / float(max_tuya - min_tuya)
     return max(1, min(255, int(round(ratio * 255.0))))
 
 
 def ha_kelvin_to_tuya(
-    kelvin: int,
+    kelvin: int | float | None,
     min_kelvin: int = DEFAULT_MIN_KELVIN,
     max_kelvin: int = DEFAULT_MAX_KELVIN,
     min_tuya: int = DEFAULT_COLOR_TEMP_MIN,
@@ -168,7 +205,13 @@ def ha_kelvin_to_tuya(
     reverse: bool = False,
 ) -> int:
     """Convert Home Assistant color temperature (Kelvin) to Tuya integer."""
-    clamped_k = max(min_kelvin, min(max_kelvin, kelvin))
+    if kelvin is None:
+        return min_tuya
+    try:
+        k = float(kelvin)
+    except (ValueError, TypeError):
+        return min_tuya
+    clamped_k = max(min_kelvin, min(max_kelvin, k))
     if max_kelvin <= min_kelvin:
         ratio = 0.0
     else:
@@ -179,7 +222,7 @@ def ha_kelvin_to_tuya(
 
 
 def tuya_to_ha_kelvin(
-    tuya_val: int,
+    tuya_val: int | str | None,
     min_kelvin: int = DEFAULT_MIN_KELVIN,
     max_kelvin: int = DEFAULT_MAX_KELVIN,
     min_tuya: int = DEFAULT_COLOR_TEMP_MIN,
@@ -187,7 +230,13 @@ def tuya_to_ha_kelvin(
     reverse: bool = False,
 ) -> int:
     """Convert Tuya color temperature to Home Assistant Kelvin."""
-    clamped_tuya = max(min_tuya, min(max_tuya, tuya_val))
+    if tuya_val is None:
+        return min_kelvin
+    try:
+        val = int(tuya_val)
+    except (ValueError, TypeError):
+        return min_kelvin
+    clamped_tuya = max(min_tuya, min(max_tuya, val))
     if max_tuya <= min_tuya:
         ratio = 0.0
     else:
