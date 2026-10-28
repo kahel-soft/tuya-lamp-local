@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Tuya Lokale Lampe einrichten",
+        "description": "Gib die lokalen Zugangsdaten deiner Tuya-Lampe ein. Die Verbindung wird direkt getestet.",
+        "data": {
+          "name": "Eigener Name (Optional, z. B. Stehlampe Wohnzimmer)",
+          "host": "IP-Adresse der Lampe",
+          "device_id": "Geräte-ID (Tuya Device ID)",
+          "local_key": "Lokaler Schlüssel (16-stelliger Local Key)",
+          "protocol_version": "Protokollversion (Empfehlung: auto)",
+          "poll_interval": "Abfrageintervall (Sekunden)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zur Lampe fehlgeschlagen. Bitte IP-Adresse, Local Key und Stromversorgung prüfen.",
+      "invalid_auth": "Authentifizierung mit dem angegebenen Local Key fehlgeschlagen."
+    },
+    "abort": {
+      "already_configured": "Diese Tuya-Lampe ist bereits in Home Assistant eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Tuya Lampe konfigurieren",
+        "description": "Passe Netzwerkdaten, Abfrageintervalle oder manuelle Datapoints an.",
+        "data": {
+          "host": "IP-Adresse",
+          "local_key": "Lokaler Schlüssel (Local Key)",
+          "protocol_version": "Protokollversion",
+          "poll_interval": "Abfrageintervall (Sekunden)",
+          "min_kelvin": "Minimale Farbtemperatur (Kelvin, Standard: 2700)",
+          "max_kelvin": "Maximale Farbtemperatur (Kelvin, Standard: 6500)",
+          "dp_power_override": "Power DP Override (Leer lassen für Auto-Erkennung)",
+          "dp_bright_override": "Helligkeits-DP Override (Leer lassen für Auto)",
+          "dp_temp_override": "Farbtemperatur-DP Override (Leer lassen für Auto)",
+          "dp_color_override": "Farben-DP Override (Leer lassen für Auto)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindungstest mit den geänderten Daten fehlgeschlagen. Die Einstellungen wurden nicht gespeichert."
+    }
+  }
+}

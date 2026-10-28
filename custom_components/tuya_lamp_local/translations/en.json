@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Tuya Local Lamp Setup",
+        "description": "Configure your Tuya Smart Lamp by entering its local network parameters.",
+        "data": {
+          "name": "Custom Lamp Name (Optional, e.g. Living Room Lamp)",
+          "host": "Lamp IP Address",
+          "device_id": "Device ID (Tuya Device ID)",
+          "local_key": "Local Key (16 characters)",
+          "protocol_version": "Protocol Version (Recommended: auto)",
+          "poll_interval": "Polling Interval (Seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the lamp. Please verify the IP address, Local Key, and ensure the lamp is powered on.",
+      "invalid_auth": "Authentication failed with the provided Local Key."
+    },
+    "abort": {
+      "already_configured": "This Tuya lamp is already configured in Home Assistant."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure Tuya Local Lamp",
+        "description": "Adjust network parameters, polling intervals, or datapoint overrides.",
+        "data": {
+          "host": "IP Address",
+          "local_key": "Local Key",
+          "protocol_version": "Protocol Version",
+          "poll_interval": "Polling Interval (Seconds)",
+          "min_kelvin": "Min Color Temp (Kelvin, default: 2700)",
+          "max_kelvin": "Max Color Temp (Kelvin, default: 6500)",
+          "dp_power_override": "Power DP Override (Leave blank for auto)",
+          "dp_bright_override": "Brightness DP Override (Leave blank for auto)",
+          "dp_temp_override": "Color Temp DP Override (Leave blank for auto)",
+          "dp_color_override": "Color DP Override (Leave blank for auto)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Connection test failed with the updated parameters. Changes were not saved."
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "domain": "tuya_lamp_local",
+  "name": "Tuya Local Lamp",
+  "codeowners": ["@kahel-soft"],
+  "config_flow": true,
+  "documentation": "https://github.com/kahel-soft/tuya-lamp-local",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/kahel-soft/tuya-lamp-local/issues",
+  "requirements": [
+    "tinytuya>=1.15.0"
+  ],
+  "version": "1.0.0"
+}
