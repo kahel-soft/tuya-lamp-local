@@ -88,8 +88,14 @@
         "description": "Wähle den Bereich, den du bearbeiten möchtest.",
         "menu_options": {
           "network": "Netzwerk & Verbindung (IP, Key, Polling)",
-          "datapoints": "Datenpunkte & Grenzwerte (DPs, Helligkeit, CCT, Farben)"
+          "datapoints": "Datenpunkte & Grenzwerte (DPs, Helligkeit, CCT, Farben)",
+          "rescan": "Lichtquellen & Live-DPs neu scannen (Erkennt zusätzliche Lichter/Sockel)"
         }
+      },
+      "rescan": {
+        "title": "Lichtquellen neu erkennen & aktualisieren",
+        "description": "Live-Statusabfrage erfolgreich durchgeführt!\n\n**Erkannte Lichtquellen:** {light_sources}\n\n**Empfangene Live-DPs der Lampe:**\n{dps_summary}\n\nKlicke auf Absenden, um die Änderungen zu speichern und neu erkannte Lichtquellen (z. B. Sockel/Base) automatisch in Home Assistant anzulegen.",
+        "data": {}
       },
       "network": {
         "title": "Netzwerk & Verbindungs-Einstellungen",
@@ -117,7 +123,11 @@
           "max_kelvin": "Max. Farbtemperatur in Kelvin (Standard: 6500)",
           "dp_color": "Farb-DP (z. B. 24 oder 5)",
           "color_type": "Farb-Codierung (Format)",
-          "dp_mode": "Betriebsmodus-DP (z. B. 21 oder 2)"
+          "dp_mode": "Betriebsmodus-DP (z. B. 21 oder 2)",
+          "dp_aux_power": "Zusatzlicht / Sockel Power-DP (z. B. 102)",
+          "dp_aux_brightness": "Zusatzlicht / Sockel Helligkeits-DP (z. B. 103)",
+          "dp_aux_color": "Zusatzlicht / Sockel Farb-DP (z. B. 105)",
+          "dp_aux_mode": "Zusatzlicht / Sockel Modus-DP (z. B. 106)"
         }
       }
     },

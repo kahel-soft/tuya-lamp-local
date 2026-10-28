@@ -65,7 +65,9 @@ def test_lamp():
         print(f"  DP {dp_id:>2}: {val}")
 
     # Check layout
-    if "20" in dps:
+    if "101" in dps and "102" in dps:
+        print("\n[Erkennung] Multi-Licht-Lampe erkannt (Hauptlicht via DP 101/24 + Sockel/Base via DP 102/103/105)!")
+    elif "20" in dps:
         print("\n[Erkennung] Moderner Tuya-Lampenstandard (DP 20-24) erkannt.")
     elif "1" in dps:
         print("\n[Erkennung] Aelterer Tuya-Lampenstandard (DP 1-5) erkannt.")

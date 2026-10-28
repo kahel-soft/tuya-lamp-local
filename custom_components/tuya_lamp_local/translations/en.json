@@ -88,8 +88,14 @@
         "description": "Select the settings category you want to adjust.",
         "menu_options": {
           "network": "Network & Connection (IP, Key, Polling)",
-          "datapoints": "Data Points & Value Ranges (DPs, CCT, Color, Dimming)"
+          "datapoints": "Data Points & Value Ranges (DPs, CCT, Color, Dimming)",
+          "rescan": "Rescan Light Sources & Live DPs (Detects secondary lights)"
         }
+      },
+      "rescan": {
+        "title": "Rescan & Update Light Sources",
+        "description": "Live status query completed!\n\n**Detected light sources:** {light_sources}\n\n**Reported live DPs:**\n{dps_summary}\n\nClick Submit to apply updates and automatically register any newly detected light sources.",
+        "data": {}
       },
       "network": {
         "title": "Network & Connection Settings",
@@ -117,7 +123,11 @@
           "max_kelvin": "Max Kelvin",
           "dp_color": "Color DP",
           "color_type": "Color Format / Encoding",
-          "dp_mode": "Work Mode DP"
+          "dp_mode": "Work Mode DP",
+          "dp_aux_power": "Aux / Secondary Light Switch DP (e.g. 102)",
+          "dp_aux_brightness": "Aux / Secondary Light Brightness DP (e.g. 103)",
+          "dp_aux_color": "Aux / Secondary Light Color DP (e.g. 105)",
+          "dp_aux_mode": "Aux / Secondary Light Mode DP (e.g. 106)"
         }
       }
     },

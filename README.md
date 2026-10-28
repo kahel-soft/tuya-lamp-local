@@ -11,7 +11,9 @@ Eine leichtgewichtige, 100 % lokale Home Assistant Integration (`custom_componen
 ## 🌟 Highlights & Funktionen
 
 * **100 % Lokale Steuerung:** Direkte Kommunikation via TCP Port 6668 im lokalen WLAN. Funktioniert auch bei vollständigem Internetausfall.
-* **Gerätelisten-Cache & Mehrfachauswahl (Neu in v1.6.0):** Einmal gefundene Geräte werden dauerhaft gespeichert. Du kannst mehrere oder alle Lampen per Checkbox auswählen und mit einem einzigen Klick gleichzeitig zu Home Assistant hinzufügen – ohne erneute Serverabfrage!
+* **Multi-Lichtquellen Unterstützung (Neu in v1.7.0):** Automatische Erkennung und Steuerung komplexer Lampen mit mehreren Lichtquellen (z. B. Stehlampen mit Hauptlicht & Sockel/Base-Beleuchtung, Deckenlampen mit Backlight). Beide Lichter werden als separate Entitäten unter demselben Gerät angelegt und individuell geschaltet, gedimmt oder eingefärbt!
+* **Dynamische Erkennung & Live-Rescan (Neu in v1.7.0):** Bestehende Geräte können jederzeit per Klick neu gescannt werden. Erkennt das Plugin eine zweite Lichtquelle oder neue DPs, werden diese vollautomatisch nachgetragen – ohne die Lampe neu anlegen zu müssen!
+* **Gerätelisten-Cache & Mehrfachauswahl:** Einmal gefundene Geräte werden dauerhaft gespeichert. Du kannst mehrere oder alle Lampen per Checkbox auswählen und mit einem einzigen Klick gleichzeitig zu Home Assistant hinzufügen.
 * **Automatische Geräteerkennung & Local Key Abruf:** Schnittstelle zur Tuya Cloud API und dem Tuya Local Key Add-on, die alle Geräte, Namen, IDs und Local Keys automatisch abruft und mit den lokalen WLAN-IPs abgleicht.
 * **Übersichtliche Geräteauswahl:** Liste aller gefundenen Geräte im Home Assistant Webinterface – du wählst einfach per Mausklick aus, welche Lampe übernommen werden soll.
 * **Optimiert für Home Assistant Green (HOAS):** Keine separate Maschine, kein Docker-Sidecar, kein Node-RED oder MQTT-Broker nötig. Läuft direkt nativ im Core-Container des Green.
@@ -51,16 +53,18 @@ Direkte Abfrage über das Tuya Entwicklerkonto (Region, Client ID & Secret).
 ### 4. Methode: Manuelle Direkteingabe
 Direkteingabe von IP, Device ID und Local Key für einzelne Lampen.
 
-### 5. Nachträgliches Anpassen & DP-Konfiguration (Options Flow)
-Über das Zahnrad / **Konfigurieren** im Dashboard kannst du jederzeit zwei Bereiche anpassen:
+### 5. Nachträgliches Anpassen, Rescan & DP-Konfiguration (Options Flow)
+Über das Zahnrad / **Konfigurieren** im Dashboard kannst du jederzeit folgende Bereiche nutzen:
+* **Lichtquellen & Live-DPs neu scannen (Neu in v1.7.0):** Fragt den Live-Status der Lampe ab und gleicht alle DPs ab. Wird dabei eine zweite Lichtquelle (wie der Sockel/Base) erkannt, wird diese sofort als neue Entität in Home Assistant hinzugefügt!
 * **Netzwerk & Verbindung:** IP-Adresse, Local Key, Protokollversion oder Abfrageintervall ändern.
 * **Datenpunkte & Grenzwerte (DPs):**
-  * Zeigt die **aktuellen Live-Werte der Lampe** direkt an (z. B. `DP 20: True | DP 21: white | DP 22: 1000 | ...`).
-  * **Power-DP:** Zuordnung des Ein/Aus-Schalters (z. B. 20 oder 1).
+  * Zeigt die **aktuellen Live-Werte der Lampe** direkt an (z. B. `DP 20: True | DP 21: colour | DP 101: True | DP 102: False | DP 103: 1000 | ...`).
+  * **Power-DP:** Zuordnung des Ein/Aus-Schalters (z. B. 20, 101 oder 1).
   * **Helligkeits-DP & Grenzwerte:** DP für Dimmer (z. B. 22 oder 3) sowie Mindest- und Maximalwert (z. B. 10 bis 1000 oder 255).
   * **Farbtemperatur-DP (CCT):** DP für Weißtöne (z. B. 23 oder 4), Grenzwerte (0 bis 1000), Kelvin-Bereich (2700K - 6500K) und Option zum **Invertieren** (Kalt/Warm umkehren).
   * **Farb-DP & Codierung:** DP für RGB/HSV (z. B. 24 oder 5) und Format (12-stelliges HSV-Hex oder 6-stelliges RGB-Hex).
   * **Modus-DP:** Betriebsmodus (z. B. 21 oder 2).
+  * **Zusatzlicht / Sockel-DPs (Multi-Light):** DPs für Power (102), Helligkeit (103), Farbe (105) und Modus (106).
 
 ---
 

@@ -42,6 +42,10 @@ from .const import (
     CONF_DP_COLOR_TEMP,
     CONF_DP_MODE,
     CONF_DP_POWER,
+    CONF_DP_AUX_POWER,
+    CONF_DP_AUX_BRIGHTNESS,
+    CONF_DP_AUX_COLOR,
+    CONF_DP_AUX_MODE,
     CONF_FILE_PATH,
     CONF_HOST,
     CONF_JSON_DATA,
@@ -877,7 +881,7 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input[CONF_LOCAL_KEY] = user_input[CONF_LOCAL_KEY].strip()
 
             await self.async_set_unique_id(device_id)
-            self._abort_if_unique_id_configured()
+            self._abort_if_unique_id_configured(updates=user_input)
 
             # Test connection
             success, detected_version, _ = await self.hass.async_add_executor_job(
@@ -928,7 +932,7 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input[CONF_LOCAL_KEY] = user_input[CONF_LOCAL_KEY].strip()
 
             await self.async_set_unique_id(device_id)
-            self._abort_if_unique_id_configured()
+            self._abort_if_unique_id_configured(updates=user_input)
 
             # Validate connectivity with the device
             success, detected_version, _ = await self.hass.async_add_executor_job(
@@ -974,7 +978,50 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
         """Display options navigation menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["network", "datapoints"],
+            menu_options=["network", "datapoints", "rescan"],
+        )
+
+    async def async_step_rescan(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Rescan device live data and detect all light sources / DPs."""
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        if not coordinator:
+            return self.async_abort(reason="cannot_connect")
+
+        if user_input is not None:
+            # Force reload of entry which re-initializes platforms and adds newly detected entities
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            return self.async_create_entry(title="", data=self.config_entry.options)
+
+        try:
+            status_data = await self.hass.async_add_executor_job(coordinator._sync_fetch_status)
+            dps = status_data.get("dps", {})
+            coordinator._detect_datapoint_layout(dps)
+            coordinator.async_set_updated_data(status_data)
+        except Exception as err:
+            _LOGGER.error("Rescan failed for device %s: %s", coordinator.device_id, err)
+            return self.async_abort(reason="cannot_connect")
+
+        sources = ["Hauptlicht (Main Light)"]
+        if coordinator.has_aux_light:
+            sources.append("Sockel / Base (Zusatzlicht - DP 102/103/105)")
+
+        dps_summary = " | ".join(
+            f"DP {k}: {v}"
+            for k, v in sorted(
+                dps.items(),
+                key=lambda x: int(x[0]) if str(x[0]).isdigit() else str(x[0]),
+            )
+        )
+
+        return self.async_show_form(
+            step_id="rescan",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "light_sources": ", ".join(sources),
+                "dps_summary": dps_summary,
+            },
         )
 
     async def async_step_network(
@@ -1082,6 +1129,23 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
         current_color = opts.get(CONF_DP_COLOR, data.get(CONF_DP_COLOR, "24"))
         current_color_type = opts.get(CONF_COLOR_TYPE, data.get(CONF_COLOR_TYPE, COLOR_TYPE_HSV_HEX_12))
 
+        current_aux_power = opts.get(
+            CONF_DP_AUX_POWER,
+            data.get(CONF_DP_AUX_POWER, "102" if coordinator and coordinator.has_aux_light else ""),
+        )
+        current_aux_bright = opts.get(
+            CONF_DP_AUX_BRIGHTNESS,
+            data.get(CONF_DP_AUX_BRIGHTNESS, "103" if coordinator and coordinator.has_aux_light else ""),
+        )
+        current_aux_color = opts.get(
+            CONF_DP_AUX_COLOR,
+            data.get(CONF_DP_AUX_COLOR, "105" if coordinator and coordinator.has_aux_light else ""),
+        )
+        current_aux_mode = opts.get(
+            CONF_DP_AUX_MODE,
+            data.get(CONF_DP_AUX_MODE, "106" if coordinator and coordinator.has_aux_light else ""),
+        )
+
         dp_schema = vol.Schema(
             {
                 vol.Required(CONF_DP_POWER, default=current_power): str,
@@ -1097,6 +1161,10 @@ class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(CONF_DP_COLOR, default=current_color): str,
                 vol.Optional(CONF_COLOR_TYPE, default=current_color_type): vol.In(COLOR_TYPES),
                 vol.Optional(CONF_DP_MODE, default=current_mode): str,
+                vol.Optional(CONF_DP_AUX_POWER, default=current_aux_power): str,
+                vol.Optional(CONF_DP_AUX_BRIGHTNESS, default=current_aux_bright): str,
+                vol.Optional(CONF_DP_AUX_COLOR, default=current_aux_color): str,
+                vol.Optional(CONF_DP_AUX_MODE, default=current_aux_mode): str,
             }
         )
 

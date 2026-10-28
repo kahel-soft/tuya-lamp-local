@@ -32,6 +32,19 @@ CONF_MAX_KELVIN = "max_kelvin"
 CONF_DP_COLOR = "dp_color"
 CONF_COLOR_TYPE = "color_type"
 
+# Multi-light / Secondary (Aux / Base / Sockel) DP keys
+CONF_DP_MAIN_POWER = "dp_main_power"
+CONF_DP_AUX_POWER = "dp_aux_power"
+CONF_DP_AUX_BRIGHTNESS = "dp_aux_brightness"
+CONF_DP_AUX_COLOR = "dp_aux_color"
+CONF_DP_AUX_MODE = "dp_aux_mode"
+CONF_DP_AUX_COLOR_TEMP = "dp_aux_color_temp"
+CONF_AUX_BRIGHTNESS_MIN = "aux_brightness_min"
+CONF_AUX_BRIGHTNESS_MAX = "aux_brightness_max"
+
+DEFAULT_AUX_BRIGHTNESS_MIN = 10
+DEFAULT_AUX_BRIGHTNESS_MAX = 1000
+
 # Color formats
 COLOR_TYPE_HSV_HEX_12 = "hsv_hex_12"
 COLOR_TYPE_RGB_HEX_6 = "rgb_hex_6"
@@ -97,6 +110,15 @@ DP_LEGACY_MODE = "2"
 DP_LEGACY_BRIGHTNESS = "3"
 DP_LEGACY_COLOR_TEMP = "4"
 DP_LEGACY_COLOR = "5"
+
+# Multi-light & Auxiliary DPs (Standard Tuya dual-channel lighting, e.g. Floor lamp + Base/Sockel)
+DP_MAIN_POWER = "101"
+DP_AUX_POWER = "102"
+DP_AUX_BRIGHTNESS = "103"
+DP_AUX_COLOR_TEMP = "104"
+DP_AUX_COLOR = "105"
+DP_AUX_MODE = "106"
+DP_AUX_SCENE = "107"
 
 # Modes
 MODE_WHITE = "white"
