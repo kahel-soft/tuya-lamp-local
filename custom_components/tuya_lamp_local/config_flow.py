@@ -252,7 +252,7 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Get the options flow for this handler."""
-        return TuyaLampOptionsFlowHandler(config_entry)
+        return TuyaLampOptionsFlowHandler()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -590,10 +590,6 @@ class TuyaLampConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class TuyaLampOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for tweaking Tuya lamp settings in the Web UI."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
