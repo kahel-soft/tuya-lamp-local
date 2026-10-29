@@ -1,5 +1,5 @@
 {
-  "name": "Tuya Local Light & Power",
-  "render_readme": true,
+  "name": "Tuya Local Direct",
+  "render_readme": false,
   "homeassistant": "2024.1.0"
 }

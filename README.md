@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/kahel-soft/tuya-lamp-local/main/brand/logo.png" width="160" alt="Tuya Local Light & Power Logo">
+  <img src="https://raw.githubusercontent.com/kahel-soft/tuya-lamp-local/main/brand/logo.png" width="160" alt="Tuya Local Direct Logo">
 </p>
 
 <p align="center">
-  <a href="#-tuya-local-light--power-for-home-assistant-english"><strong>🇬🇧 English</strong></a> &nbsp;|&nbsp; 
-  <a href="#-tuya-local-light--power-für-home-assistant-deutsch"><strong>🇩🇪 Deutsch</strong></a>
+  <a href="#-tuya-local-direct-for-home-assistant-english"><strong>🇬🇧 English</strong></a> &nbsp;|&nbsp; 
+  <a href="#-tuya-local-direct-für-home-assistant-deutsch"><strong>🇩🇪 Deutsch</strong></a>
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 
 ---
 
-# 🇬🇧 Tuya Local Light & Power for Home Assistant (English)
+# 🇬🇧 Tuya Local Direct for Home Assistant (English)
 
 <p align="center">
   <strong>100% local, latency-free control for Tuya Wi-Fi lights, multi-channel floor lamps (main light + base), and smart sockets/power strips.</strong><br>
@@ -61,18 +61,18 @@ Install as a **custom repository** in HACS:
    * **Repository:** `https://github.com/kahel-soft/tuya-lamp-local`
    * **Category:** `Integration`
 4. Click **Add**.
-5. Search for **Tuya Local Light & Power**, click on it, and select **Download**.
+5. Search for **Tuya Local Direct**, click on it, and select **Download**.
 6. Restart Home Assistant (**Developer Tools $\rightarrow$ Restart**).
 
 ---
 
 ## ⚙️ Device Setup (Web UI)
 
-Navigate in Home Assistant to **Settings $\rightarrow$ Devices & Services $\rightarrow$ Add Integration** and search for **Tuya Local Light & Power**.
+Navigate in Home Assistant to **Settings $\rightarrow$ Devices & Services $\rightarrow$ Add Integration** and search for **Tuya Local Direct**.
 
 ```mermaid
 flowchart TD
-    Start["Add Integration: Tuya Local Light & Power"] --> Choice{"Select Setup Method"}
+    Start["Add Integration: Tuya Local Direct"] --> Choice{"Select Setup Method"}
     Choice -->|"Previously Discovered"| Cached["Add Discovered Devices (Persistent Cache)"]
     Choice -->|"Local Add-on Running"| Server["Tuya Local Key Add-on (Server URL)"]
     Choice -->|"Copy & Paste"| JSON["Paste Raw JSON (from Add-on)"]
@@ -122,7 +122,7 @@ Click **Configure** on any device card in Home Assistant:
 ---
 ---
 
-# 🇩🇪 Tuya Local Light & Power für Home Assistant (Deutsch)
+# 🇩🇪 Tuya Local Direct für Home Assistant (Deutsch)
 
 <p align="center">
   <strong>100 % lokale, latenzfreie Steuerung von Tuya Wi-Fi Lampen, Multi-Lichtquellen (z. B. Stehlampen mit Sockel) und smarten Steckdosen.</strong><br>
@@ -167,14 +167,14 @@ Die Integration kann als **benutzerdefiniertes Repository** in HACS installiert 
    * **Repository:** `https://github.com/kahel-soft/tuya-lamp-local`
    * **Typ:** `Integration`
 4. Klicke auf **Hinzufügen**.
-5. Suche nach **Tuya Local Light & Power**, klicke darauf und wähle **Herunterladen**.
+5. Suche nach **Tuya Local Direct**, klicke darauf und wähle **Herunterladen**.
 6. Starte Home Assistant neu (**Entwicklerwerkzeuge $\rightarrow$ Neu starten**).
 
 ---
 
 ## ⚙️ Geräte einbinden (Webinterface)
 
-Navigiere in Home Assistant zu **Einstellungen $\rightarrow$ Geräte & Dienste $\rightarrow$ Integration hinzufügen** und suche nach **Tuya Local Light & Power**.
+Navigiere in Home Assistant zu **Einstellungen $\rightarrow$ Geräte & Dienste $\rightarrow$ Integration hinzufügen** und suche nach **Tuya Local Direct**.
 
 Wähle deine bevorzugte Einrichtungsmethode:
 * **Gefundene Geräte hinzufügen (Cache):** Schnellauswahl bereits abgefragter Geräte ohne neue Abfrage.

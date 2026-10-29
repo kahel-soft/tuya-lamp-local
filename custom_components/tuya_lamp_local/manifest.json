@@ -1,6 +1,6 @@
 {
   "domain": "tuya_lamp_local",
-  "name": "Tuya Local Light & Power",
+  "name": "Tuya Local Direct",
   "codeowners": ["@kahel-soft"],
   "config_flow": true,
   "documentation": "https://github.com/kahel-soft/tuya-lamp-local",
@@ -10,5 +10,5 @@
   "requirements": [
     "tinytuya>=1.15.0"
   ],
-  "version": "1.8.8"
+  "version": "1.8.9"
 }
