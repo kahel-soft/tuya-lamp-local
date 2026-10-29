@@ -451,7 +451,7 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.has_brightness = True
             self.has_color_temp = True
             self.has_color = True
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "[%s] Configured as Type A lamp: power=%s, mode=%s, bright=%s (%s-%s), cct=%s (%s-%s), color=%s (%s)",
                 self.device_id, self.dp_power, self.dp_mode, self.dp_brightness,
                 self.brightness_min, self.brightness_max, self.dp_color_temp,
@@ -526,7 +526,7 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 or self.custom_dp_color
                 or self.category in CATEGORY_LIGHTS
             )
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "[%s] Configured as Type B lamp: power=%s, mode=%s, bright=%s (%s-%s), cct=%s (%s-%s), color=%s (%s)",
                 self.device_id, self.dp_power, self.dp_mode, self.dp_brightness,
                 self.brightness_min, self.brightness_max, self.dp_color_temp,
@@ -631,13 +631,13 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _sync_send_dps(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Synchronously send DP payload to Tuya device with auto-reconnect."""
-        _LOGGER.warning("[%s] SENDING DPS to %s: %s", self.device_id, self.host, payload)
+        _LOGGER.debug("[%s] SENDING DPS to %s: %s", self.device_id, self.host, payload)
         device = self._get_device()
         try:
             result = device.set_multiple_values(payload)
-            _LOGGER.warning("[%s] RESULT from %s: %s", self.device_id, self.host, result)
+            _LOGGER.debug("[%s] RESULT from %s: %s", self.device_id, self.host, result)
         except Exception as err:
-            _LOGGER.warning("Socket error during command send to %s: %s; retrying with fresh connection", self.host, err)
+            _LOGGER.debug("Socket error during command send to %s: %s; retrying with fresh connection", self.host, err)
             result = {"Error": str(err)}
 
         if isinstance(result, dict) and "Error" in result:
