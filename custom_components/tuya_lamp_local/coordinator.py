@@ -398,31 +398,54 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not is_dual_fixture:
             if self.custom_dp_power == DP_LEGACY_POWER:
                 is_type_a = True
-            elif DP_LEGACY_POWER in dps and DP_MODERN_POWER not in dps and DP_MAIN_POWER not in dps:
+            elif DP_LEGACY_POWER in dps and DP_MODERN_POWER not in dps:
+                is_type_a = True
+            elif (self.category in ("dj", "dc")) and DP_MODERN_POWER not in dps:
                 is_type_a = True
             elif (self.category in CATEGORY_LIGHTS) and (DP_MODERN_POWER not in dps and DP_MAIN_POWER not in dps):
                 is_type_a = True
 
         if is_type_a:
-            self.dp_power = self.custom_dp_power or DP_LEGACY_POWER
+            # On Type A lamps, default Type B DPs (20, 21, 22, 23, 24) must NOT override Type A DPs (1, 2, 3, 4, 5)
+            self.dp_power = (
+                self.custom_dp_power
+                if self.custom_dp_power and self.custom_dp_power not in (DP_MODERN_POWER, "auto")
+                else DP_LEGACY_POWER
+            )
             self.dp_master_power = None
-            self.dp_mode = self.custom_dp_mode or DP_LEGACY_MODE
-            self.dp_brightness = self.custom_dp_brightness or DP_LEGACY_BRIGHTNESS
-            self.dp_color_temp = self.custom_dp_color_temp or DP_LEGACY_COLOR_TEMP
-            self.dp_color = self.custom_dp_color or DP_LEGACY_COLOR
+            self.dp_mode = (
+                self.custom_dp_mode
+                if self.custom_dp_mode and self.custom_dp_mode not in (DP_MODERN_MODE, "auto")
+                else DP_LEGACY_MODE
+            )
+            self.dp_brightness = (
+                self.custom_dp_brightness
+                if self.custom_dp_brightness and self.custom_dp_brightness not in (DP_MODERN_BRIGHTNESS, "auto")
+                else DP_LEGACY_BRIGHTNESS
+            )
+            self.dp_color_temp = (
+                self.custom_dp_color_temp
+                if self.custom_dp_color_temp and self.custom_dp_color_temp not in (DP_MODERN_COLOR_TEMP, "auto")
+                else DP_LEGACY_COLOR_TEMP
+            )
+            self.dp_color = (
+                self.custom_dp_color
+                if self.custom_dp_color and self.custom_dp_color not in (DP_MODERN_COLOR, "auto")
+                else DP_LEGACY_COLOR
+            )
 
-            # For Type A lamps, default brightness range is 25 - 255 unless customized
-            if self.brightness_max == DEFAULT_BRIGHTNESS_MAX:
+            # For Type A lamps, default brightness range is 25 - 255 unless explicitly customized (not 1000)
+            if self.brightness_max == DEFAULT_BRIGHTNESS_MAX or self.brightness_max > 255:
                 self.brightness_min = 25
                 self.brightness_max = 255
 
-            # For Type A lamps, default color temp range is 0 - 255 unless customized
-            if self.color_temp_max == DEFAULT_COLOR_TEMP_MAX:
+            # For Type A lamps, default color temp range is 0 - 255 unless explicitly customized (not 1000)
+            if self.color_temp_max == DEFAULT_COLOR_TEMP_MAX or self.color_temp_max > 255:
                 self.color_temp_min = 0
                 self.color_temp_max = 255
 
             # For Type A lamps, default color format is 14-char hex (RRGGBBHHHHSSVV)
-            if self.color_type in (COLOR_TYPE_HSV_HEX_12, "rgb8"):
+            if self.color_type in (COLOR_TYPE_HSV_HEX_12, "rgb8", "auto"):
                 self.color_type = COLOR_TYPE_RGBHSV_HEX_14
 
             self.has_brightness = True

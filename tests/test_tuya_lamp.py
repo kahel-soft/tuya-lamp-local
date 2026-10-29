@@ -32,6 +32,7 @@ from custom_components.tuya_lamp_local.const import (
     tuya_to_ha_kelvin,
 )
 from custom_components.tuya_lamp_local.coordinator import TuyaLampCoordinator
+from custom_components.tuya_lamp_local.light import TuyaLocalLight, TuyaLocalAuxLight
 
 
 def test_brightness_conversions():
@@ -446,3 +447,61 @@ async def test_tuya_local_hauptlicht_without_dp22():
     assert light.color_mode == ColorMode.HS
     assert light.hs_color == (120.0, 100.0)
     assert light.brightness == int(round((500 / 1000.0) * 255.0))
+
+
+@pytest.mark.asyncio
+async def test_type_a_lamp_with_legacy_type_b_options():
+    """Verify Type A lamp (DP 1-5) cleanly overrides legacy Type B defaults (20, 21, 22, 23, 24)."""
+    entry = MagicMock()
+    entry.title = "Flur - Lampe OG"
+    entry.options = {
+        "dp_power": "1",
+        "dp_mode": "21",
+        "dp_brightness": "22",
+        "dp_color_temp": "23",
+        "dp_color": "24",
+    }
+    entry.data = {
+        "host": "192.168.178.186",
+        "device_id": "bfa4bac177e534a935d6pm",
+        "local_key": ">XX0ehL!4sbr'CiK",
+        "category": "dj",
+    }
+
+    coord = TuyaLampCoordinator(MagicMock(), entry)
+    coord._detect_datapoint_layout({"1": True})
+
+    # Verify DPs mapped to 1-5, NOT 20-24
+    assert coord.dp_power == "1"
+    assert coord.dp_mode == "2"
+    assert coord.dp_brightness == "3"
+    assert coord.dp_color_temp == "4"
+    assert coord.dp_color == "5"
+    assert coord.brightness_min == 25
+    assert coord.brightness_max == 255
+    assert coord.color_temp_min == 0
+    assert coord.color_temp_max == 255
+    assert coord.color_type == COLOR_TYPE_RGBHSV_HEX_14
+
+    sent_payloads = []
+    async def mock_send_dps(payload):
+        sent_payloads.append(payload)
+    coord.async_send_dps = mock_send_dps
+
+    light = TuyaLocalLight(coord, entry)
+
+    # 1. Setting brightness sends DP 1, 3, 2='white'
+    await light.async_turn_on(brightness=150)
+    assert sent_payloads[-1]["1"] is True
+    assert sent_payloads[-1]["2"] == "white"
+    assert "3" in sent_payloads[-1]
+    assert 25 <= sent_payloads[-1]["3"] <= 255
+    assert "22" not in sent_payloads[-1]
+
+    # 2. Setting color sends DP 1, 5 (14-char hex), 2='colour'
+    await light.async_turn_on(hs_color=(120.0, 100.0), brightness=200)
+    assert sent_payloads[-1]["1"] is True
+    assert sent_payloads[-1]["2"] == "colour"
+    assert len(sent_payloads[-1]["5"]) == 14
+    assert "24" not in sent_payloads[-1]
+
