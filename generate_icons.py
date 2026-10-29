@@ -138,6 +138,7 @@ def render_icon(target_size=512):
 
 if __name__ == "__main__":
     os.makedirs("custom_components/tuya_lamp_local/brand", exist_ok=True)
+    os.makedirs("brand", exist_ok=True)
 
     icon_256 = render_icon(256)
     icon_512 = render_icon(512)
@@ -148,11 +149,17 @@ if __name__ == "__main__":
     icon_512.save("custom_components/tuya_lamp_local/brand/logo.png", "PNG")
     icon_512.save("custom_components/tuya_lamp_local/brand/logo@2x.png", "PNG")
 
-    # 2. Direct component root
+    # 2. Repository root brand directory for HACS
+    icon_256.save("brand/icon.png", "PNG")
+    icon_512.save("brand/icon@2x.png", "PNG")
+    icon_512.save("brand/logo.png", "PNG")
+    icon_512.save("brand/logo@2x.png", "PNG")
+
+    # 3. Direct component root
     icon_512.save("custom_components/tuya_lamp_local/icon.png", "PNG")
     icon_512.save("custom_components/tuya_lamp_local/logo.png", "PNG")
 
-    # 3. Repository root for HACS
+    # 4. Repository root for HACS
     icon_512.save("icon.png", "PNG")
     icon_512.save("logo.png", "PNG")
 
@@ -161,6 +168,8 @@ if __name__ == "__main__":
     print("    - custom_components/tuya_lamp_local/brand/icon@2x.png (512x512)")
     print("    - custom_components/tuya_lamp_local/brand/logo.png (512x512)")
     print("    - custom_components/tuya_lamp_local/brand/logo@2x.png (512x512)")
+    print("    - brand/icon.png (root)")
+    print("    - brand/logo.png (root)")
     print("    - custom_components/tuya_lamp_local/icon.png")
     print("    - custom_components/tuya_lamp_local/logo.png")
     print("    - icon.png (root)")

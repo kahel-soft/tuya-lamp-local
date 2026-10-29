@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Tuya Lampe einbinden",
-        "description": "Wähle aus, wie du deine Tuya-Lampe einrichten möchtest.",
+        "title": "Tuya Gerät einbinden",
+        "description": "Wähle aus, wie du dein Tuya-Gerät (WLAN-Lampe, Stehlampe mit Sockel oder smarte Steckdose) einrichten möchtest.",
         "data": {
           "discovery_method": "Einrichtungs-Methode"
         }
@@ -17,7 +17,7 @@
       },
       "tuya_local_key_json": {
         "title": "Raw JSON aus Tuya Local Key einfügen",
-        "description": "Öffne dein Tuya Local Key Add-on, klicke bei deiner Lampe auf 'Raw JSON' -> 'Copy' und füge den Text hier ein.",
+        "description": "Öffne dein Tuya Local Key Add-on, klicke bei deinem Gerät auf 'Raw JSON' -> 'Copy' und füge den Text hier ein.",
         "data": {
           "json_data": "Raw JSON Text (hier einfügen)",
           "host": "Lokale IP-Adresse (Optional - wird sonst automatisch im WLAN gesucht)"
@@ -35,17 +35,17 @@
       },
       "select_device": {
         "title": "Gefundene Tuya-Geräte ({count} gefunden)",
-        "description": "Wähle die Lampe(n) aus, die du in Home Assistant übernehmen möchtest. Du kannst mehrere Geräte gleichzeitig auswählen, um sie auf einmal hinzuzufügen.",
+        "description": "Wähle die Geräte aus, die du in Home Assistant übernehmen möchtest. Du kannst mehrere Geräte gleichzeitig auswählen, um sie auf einmal hinzuzufügen.",
         "data": {
           "selected_devices": "Geräte auswählen",
           "selected_device": "Gefundenes Gerät auswählen"
         }
       },
       "confirm_device": {
-        "title": "Lampe bestätigen & Verbindung testen",
+        "title": "Gerät bestätigen & Verbindung testen",
         "description": "Überprüfe die automatisch ermittelten Daten. Beim Absenden wird die Verbindung direkt getestet.",
         "data": {
-          "name": "Name der Lampe",
+          "name": "Name des Geräts",
           "host": "IP-Adresse",
           "device_id": "Geräte-ID (Device ID)",
           "local_key": "Lokaler Schlüssel (Local Key)",
@@ -55,7 +55,7 @@
       },
       "manual": {
         "title": "Manuelle Einrichtung",
-        "description": "Gib die lokalen Zugangsdaten der Tuya-Lampe direkt ein.",
+        "description": "Gib die lokalen Zugangsdaten des Tuya-Geräts (Lampe oder Steckdose) direkt ein.",
         "data": {
           "name": "Eigener Name (Optional)",
           "host": "IP-Adresse",
@@ -67,9 +67,9 @@
       }
     },
     "error": {
-      "host_required": "Bitte gib die lokale IP-Adresse der Lampe ein.",
+      "host_required": "Bitte gib die lokale IP-Adresse des Geräts ein.",
       "no_device_selected": "Bitte wähle mindestens ein Gerät aus.",
-      "cannot_connect": "Verbindung zur Lampe fehlgeschlagen. Bitte IP-Adresse, Local Key und Stromversorgung prüfen.",
+      "cannot_connect": "Verbindung zum Gerät fehlgeschlagen. Bitte IP-Adresse, Local Key und Stromversorgung prüfen.",
       "cannot_connect_server": "Verbindung zum Tuya Local Key Add-on fehlgeschlagen. Läuft das Add-on? Alternativ kannst du die Methode 'Raw JSON einfügen' nutzen.",
       "no_data_provided": "Bitte füge den Raw JSON Text aus dem Add-on ein.",
       "cloud_fetch_error": "Geräteabruf aus der Tuya Cloud fehlgeschlagen. Bitte Region, Client ID, Secret und Device ID prüfen.",
@@ -78,14 +78,14 @@
       "invalid_auth": "Authentifizierung mit dem angegebenen Local Key fehlgeschlagen."
     },
     "abort": {
-      "already_configured": "Diese Tuya-Lampe ist bereits in Home Assistant eingerichtet.",
+      "already_configured": "Dieses Tuya-Gerät ist bereits in Home Assistant eingerichtet.",
       "all_devices_configured": "Alle gefundenen Geräte aus deinem Konto sind bereits in Home Assistant eingerichtet."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Tuya Lampe konfigurieren",
+        "title": "Tuya Gerät konfigurieren",
         "description": "Wähle den Bereich, den du bearbeiten möchtest.",
         "menu_options": {
           "network": "Netzwerk & Verbindung (IP, Key, Polling)",
@@ -110,7 +110,7 @@
       },
       "datapoints": {
         "title": "Datenpunkte & Skalierung (DPs)",
-        "description": "Aktuelle Live-Werte der Lampe:\n{detected_dps}\n\nPasse hier die Zuordnung der Datenpunkte und Grenzwerte für dieses Gerät an.",
+        "description": "Aktuelle Live-Werte des Geräts:\n{detected_dps}\n\nPasse hier die Zuordnung der Datenpunkte und Grenzwerte für dieses Gerät an.",
         "data": {
           "device_type": "Gerätetyp (auto = Automatisch erkennen, light = Lampe, switch = Steckdose / Schalter)",
           "dp_power": "Power / Ein-Aus-DP (z. B. 20 oder 1)",

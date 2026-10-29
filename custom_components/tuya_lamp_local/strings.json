@@ -2,15 +2,15 @@
   "config": {
     "step": {
       "user": {
-        "title": "Add Tuya Lamp",
-        "description": "Choose how you want to add your Tuya lamp.",
+        "title": "Add Tuya Device",
+        "description": "Choose how you want to add your Tuya Wi-Fi light, multi-light fixture, or smart socket.",
         "data": {
           "discovery_method": "Setup Method"
         }
       },
       "tuya_local_key_server": {
         "title": "Tuya Local Key Add-on (Server URL)",
-        "description": "Connect automatically to your running Tuya Local Key Add-on.",
+        "description": "Connect automatically to your running Tuya Local Key Add-on to import discovered devices.",
         "data": {
           "server_url": "Add-on Server URL"
         }
@@ -35,17 +35,17 @@
       },
       "select_device": {
         "title": "Select Tuya Device ({count} found)",
-        "description": "Select the device(s) you want to add as a lamp in Home Assistant. Multi-selection is supported to add multiple lamps at once.",
+        "description": "Select the device(s) you want to add to Home Assistant. Multi-selection is supported to add multiple devices at once.",
         "data": {
           "selected_devices": "Discovered Devices",
           "selected_device": "Discovered Devices"
         }
       },
       "confirm_device": {
-        "title": "Confirm Lamp Configuration",
-        "description": "Review and verify the connection details for this lamp.",
+        "title": "Confirm Device Configuration",
+        "description": "Review and verify the connection details for this device.",
         "data": {
-          "name": "Custom Lamp Name",
+          "name": "Custom Device Name",
           "host": "IP Address",
           "device_id": "Device ID",
           "local_key": "Local Key",
@@ -54,10 +54,10 @@
         }
       },
       "manual": {
-        "title": "Manual Lamp Setup",
-        "description": "Directly enter the local parameters of your Tuya lamp.",
+        "title": "Manual Device Setup",
+        "description": "Directly enter the local parameters of your Tuya light or smart socket.",
         "data": {
-          "name": "Custom Lamp Name (Optional)",
+          "name": "Custom Device Name (Optional)",
           "host": "IP Address",
           "device_id": "Device ID",
           "local_key": "Local Key (16 characters)",
@@ -67,9 +67,9 @@
       }
     },
     "error": {
-      "host_required": "Please enter the local IP address of the lamp.",
+      "host_required": "Please enter the local IP address of the device.",
       "no_device_selected": "Please select at least one device.",
-      "cannot_connect": "Failed to connect to the lamp. Please verify the IP address, Local Key, and ensure the lamp is powered on.",
+      "cannot_connect": "Failed to connect to the device. Please verify the IP address, Local Key, and ensure the device is powered on.",
       "cannot_connect_server": "Could not connect to the Tuya Local Key add-on URL. Ensure the add-on is running or use the 'Paste Raw JSON' method.",
       "no_data_provided": "Please paste the Raw JSON text.",
       "cloud_fetch_error": "Failed to fetch devices from Tuya Cloud. Please verify your Region, Client ID, Client Secret, and Device ID.",
@@ -78,14 +78,14 @@
       "invalid_auth": "Authentication failed with the provided Local Key."
     },
     "abort": {
-      "already_configured": "This Tuya lamp is already configured in Home Assistant.",
+      "already_configured": "This Tuya device is already configured in Home Assistant.",
       "all_devices_configured": "All discovered devices from your account are already configured in Home Assistant."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Configure Tuya Lamp",
+        "title": "Configure Tuya Device",
         "description": "Select the settings category you want to adjust.",
         "menu_options": {
           "network": "Network & Connection (IP, Key, Polling)",
@@ -110,7 +110,7 @@
       },
       "datapoints": {
         "title": "Data Points & Scaling Parameters",
-        "description": "Currently reported live DPs:\n{detected_dps}\n\nConfigure custom DP mappings and scaling limits for this lamp.",
+        "description": "Currently reported live DPs:\n{detected_dps}\n\nConfigure custom DP mappings and scaling limits for this device.",
         "data": {
           "device_type": "Device Type (auto = automatic, light = Lamp, switch = Socket / Plug)",
           "dp_power": "Power Switch DP",
