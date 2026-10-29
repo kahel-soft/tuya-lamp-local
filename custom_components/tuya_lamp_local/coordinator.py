@@ -433,13 +433,13 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Dual-source fixture: DP 101 is main light switch, DP 20 is master hardware switch
             self.dp_power = DP_MAIN_POWER
             self.dp_master_power = DP_MODERN_POWER if DP_MODERN_POWER in dps else None
-            self.dp_mode = self.custom_dp_mode or DP_MODERN_MODE
-            self.dp_brightness = self.custom_dp_brightness or DP_MODERN_BRIGHTNESS
-            self.dp_color_temp = self.custom_dp_color_temp or DP_MODERN_COLOR_TEMP
-            self.dp_color = self.custom_dp_color or DP_MODERN_COLOR
-            self.has_brightness = bool(self.dp_brightness in dps or self.custom_dp_brightness)
-            self.has_color_temp = bool(self.dp_color_temp in dps or self.custom_dp_color_temp)
-            self.has_color = bool(self.dp_color in dps or self.custom_dp_color)
+            self.dp_mode = self.custom_dp_mode or (DP_MODERN_MODE if DP_MODERN_MODE in dps else None)
+            self.dp_brightness = self.custom_dp_brightness or (DP_MODERN_BRIGHTNESS if DP_MODERN_BRIGHTNESS in dps else None)
+            self.dp_color_temp = self.custom_dp_color_temp or (DP_MODERN_COLOR_TEMP if DP_MODERN_COLOR_TEMP in dps else None)
+            self.dp_color = self.custom_dp_color or (DP_MODERN_COLOR if DP_MODERN_COLOR in dps else None)
+            self.has_brightness = bool(self.dp_brightness or (self.dp_color and self.color_type != COLOR_TYPE_RGB_HEX_6))
+            self.has_color_temp = bool(self.dp_color_temp)
+            self.has_color = bool(self.dp_color)
 
         else:
             # Modern Type B lamp (DP 20-25)

@@ -277,6 +277,7 @@ async def test_tuya_local_light_type_a_operations():
 async def test_tuya_local_aux_light_dual_fixture_operations():
     from custom_components.tuya_lamp_local.light import TuyaLocalAuxLight
     from custom_components.tuya_lamp_local.const import MODE_COLOUR, MODE_WHITE
+    from homeassistant.components.light import ColorMode
 
     hass = MagicMock()
     entry = MagicMock()
@@ -284,12 +285,12 @@ async def test_tuya_local_aux_light_dual_fixture_operations():
     entry.data = {
         "host": "192.168.178.100",
         "device_id": "dummy_dual_id",
-        "category": "dj",
+        "category": "dd",
     }
     entry.options = {}
 
     coord = TuyaLampCoordinator(hass, entry)
-    coord._detect_datapoint_layout({"20": True, "101": True, "102": True})
+    coord._detect_datapoint_layout({"20": True, "101": True, "102": True, "103": 1000, "105": "000003e803e8", "106": "white"})
 
     sent_payloads = []
     async def mock_send_dps(payload):
@@ -298,18 +299,150 @@ async def test_tuya_local_aux_light_dual_fixture_operations():
 
     aux = TuyaLocalAuxLight(coord, entry)
 
-    # 1. Turn on Aux Color
-    await aux.async_turn_on(hs_color=(0.0, 100.0), brightness=255)
+    # 1. Verify supported color modes contain HS and WHITE
+    assert ColorMode.HS in aux.supported_color_modes
+    assert ColorMode.WHITE in aux.supported_color_modes
+
+    # 2. Turn on Aux Color (saturation > 0): must send DP 105, must NOT send DP 103!
+    await aux.async_turn_on(hs_color=(240.0, 100.0), brightness=255)
     assert sent_payloads[-1]["102"] is True
     assert sent_payloads[-1]["106"] == MODE_COLOUR
     assert "105" in sent_payloads[-1]
+    assert "103" not in sent_payloads[-1]
 
-    # 2. Turn on Aux White
-    await aux.async_turn_on(color_temp_kelvin=2700, brightness=200)
+    # 3. Turn on Aux White via ATTR_WHITE: must send DP 103, must NOT send DP 105!
+    await aux.async_turn_on(white=200)
     assert sent_payloads[-1]["102"] is True
     assert sent_payloads[-1]["106"] == MODE_WHITE
     assert "103" in sent_payloads[-1]
+    assert "105" not in sent_payloads[-1]
 
-    # 3. Turn off Aux
+    # 4. Pure white selected on color wheel (hs_color saturation == 0): seamless switch to real white!
+    await aux.async_turn_on(hs_color=(0.0, 0.0), brightness=150)
+    assert sent_payloads[-1]["102"] is True
+    assert sent_payloads[-1]["106"] == MODE_WHITE
+    assert "103" in sent_payloads[-1]
+    assert "105" not in sent_payloads[-1]
+
+    # 5. Turn off Aux
     await aux.async_turn_off()
     assert sent_payloads[-1]["102"] is False
+
+    # 6. Verify property states in WHITE mode
+    coord.data = {
+        "dps": {
+            "20": True,
+            "101": True,
+            "102": True,
+            "103": 500,
+            "105": "000003e803e8",
+            "106": MODE_WHITE,
+        }
+    }
+    assert aux.is_on is True
+    assert aux.color_mode == ColorMode.WHITE
+    assert aux.hs_color is None
+    assert aux.brightness == tuya_brightness_to_ha(500, min_tuya=10, max_tuya=1000)
+
+    # 7. Verify property states in COLOUR mode
+    coord.data = {
+        "dps": {
+            "20": True,
+            "101": True,
+            "102": True,
+            "103": 500,
+            "105": "00f003e801f4",  # Blue (240), 50% bright (500)
+            "106": MODE_COLOUR,
+        }
+    }
+    assert aux.color_mode == ColorMode.HS
+    assert aux.hs_color == (240.0, 100.0)
+    assert aux.brightness == int(round((500 / 1000.0) * 255.0))
+
+
+@pytest.mark.asyncio
+async def test_tuya_local_hauptlicht_without_dp22():
+    from custom_components.tuya_lamp_local.light import TuyaLocalLight
+    from custom_components.tuya_lamp_local.const import MODE_COLOUR, MODE_WHITE
+    from homeassistant.components.light import ColorMode
+
+    hass = MagicMock()
+    entry = MagicMock()
+    entry.title = "Stehlampe Links"
+    entry.data = {
+        "host": "192.168.178.183",
+        "device_id": "bfef89a9c04629c875q24u",
+        "category": "dd",
+    }
+    entry.options = {}
+
+    coord = TuyaLampCoordinator(hass, entry)
+    # Dual fixture layout: DP 20, 21, 24, 101, 102, 103, 105, 106 - NO DP 22!
+    coord._detect_datapoint_layout({
+        "20": True,
+        "21": "colour",
+        "24": "00ee030c01d7",
+        "101": True,
+        "102": True,
+        "103": 1000,
+        "105": "00ee030c03e8",
+        "106": "colour",
+    })
+
+    assert coord.dp_power == "101"
+    assert coord.dp_master_power == "20"
+    assert coord.dp_brightness is None  # Confirmed: no DP 22
+    assert coord.has_brightness is True
+
+    sent_payloads = []
+    async def mock_send_dps(payload):
+        sent_payloads.append(payload)
+    coord.async_send_dps = mock_send_dps
+
+    light = TuyaLocalLight(coord, entry)
+
+    # 1. Supported color modes
+    assert ColorMode.HS in light.supported_color_modes
+    assert ColorMode.WHITE in light.supported_color_modes
+
+    # 2. Brightness adjustment routes to DP 24 HSV without attempting DP 22!
+    await light.async_turn_on(brightness=180)
+    assert sent_payloads[-1]["101"] is True
+    assert "24" in sent_payloads[-1]
+    assert "22" not in sent_payloads[-1]
+
+    # 3. White mode activation routes to DP 24 (Sat=0) and DP 21='white' without DP 22
+    await light.async_turn_on(white=220)
+    assert sent_payloads[-1]["101"] is True
+    assert sent_payloads[-1]["21"] == MODE_WHITE
+    assert "24" in sent_payloads[-1]
+    assert "22" not in sent_payloads[-1]
+
+    # 4. Property verification in WHITE mode
+    coord.data = {
+        "dps": {
+            "20": True,
+            "21": MODE_WHITE,
+            "24": "0000000003e8",
+            "101": True,
+            "102": False,
+        }
+    }
+    assert light.is_on is True
+    assert light.color_mode == ColorMode.WHITE
+    assert light.hs_color is None
+    assert light.brightness == 255
+
+    # 5. Property verification in COLOUR mode
+    coord.data = {
+        "dps": {
+            "20": True,
+            "21": MODE_COLOUR,
+            "24": "007803e801f4",  # Green (120), 50% bright (500)
+            "101": True,
+            "102": False,
+        }
+    }
+    assert light.color_mode == ColorMode.HS
+    assert light.hs_color == (120.0, 100.0)
+    assert light.brightness == int(round((500 / 1000.0) * 255.0))

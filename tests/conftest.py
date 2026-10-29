@@ -44,6 +44,7 @@ class ColorMode(StrEnum):
     COLOR_TEMP = "color_temp"
     HS = "hs"
     RGB = "rgb"
+    WHITE = "white"
 
 ha_light.ColorMode = ColorMode
 ha_light.LightEntity = object
