@@ -21,6 +21,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    COLOR_TYPE_RGBHSV_HEX_14,
     COLOR_TYPE_RGB_HEX_6,
     DOMAIN,
     MODE_COLOUR,
@@ -34,8 +35,10 @@ from .const import (
     to_bool,
     tuya_brightness_to_ha,
     tuya_hex_to_ha_hs,
+    tuya_hex_14_to_ha_hs,
     tuya_hex_to_ha_rgb,
     tuya_to_ha_kelvin,
+    ha_hs_to_tuya_hex_14,
 )
 from .coordinator import TuyaLampCoordinator
 
@@ -222,7 +225,7 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
 
         val = self._get_dp(self.coordinator.dp_brightness)
         if val is None:
-            return None
+            return 255 if self.is_on else None
         return tuya_brightness_to_ha(
             int(val),
             min_tuya=self.coordinator.brightness_min,
@@ -237,7 +240,7 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
 
         val = self._get_dp(self.coordinator.dp_color_temp)
         if val is None:
-            return None
+            return self.coordinator.min_kelvin if self.is_on else None
         return tuya_to_ha_kelvin(
             int(val),
             min_kelvin=self.coordinator.min_kelvin,
@@ -253,11 +256,21 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if not self.coordinator.has_color:
             return None
 
-        hex_data = str(self._get_dp(self.coordinator.dp_color, ""))
+        hex_data = str(self._get_dp(self.coordinator.dp_color, "")).strip()
+        if not hex_data:
+            return (0.0, 0.0) if (self.is_on and self.color_mode in (ColorMode.HS, ColorMode.RGB)) else None
+
         if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
             rgb = tuya_hex_to_ha_rgb(hex_data)
             if rgb is not None:
                 return ha_rgb_to_hs(rgb)
+            return None
+
+        if self.coordinator.color_type == COLOR_TYPE_RGBHSV_HEX_14 or len(hex_data) == 14:
+            parsed = tuya_hex_14_to_ha_hs(hex_data)
+            if parsed is not None:
+                hs, _ = parsed
+                return hs
             return None
 
         parsed = tuya_hex_to_ha_hs(hex_data)
@@ -272,8 +285,8 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if not self.coordinator.has_color:
             return None
 
-        hex_data = str(self._get_dp(self.coordinator.dp_color, ""))
-        if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
+        hex_data = str(self._get_dp(self.coordinator.dp_color, "")).strip()
+        if hex_data and (self.coordinator.color_type in (COLOR_TYPE_RGB_HEX_6, COLOR_TYPE_RGBHSV_HEX_14) or len(hex_data) == 14):
             return tuya_hex_to_ha_rgb(hex_data)
 
         if self.hs_color is not None:
@@ -289,12 +302,27 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if self.coordinator.dp_master_power:
             payload[self.coordinator.dp_master_power] = True
 
+        # Handle Dedicated White Mode (ATTR_WHITE)
+        if ATTR_WHITE in kwargs:
+            white_bright = kwargs[ATTR_WHITE]
+            if self.coordinator.dp_brightness:
+                payload[self.coordinator.dp_brightness] = ha_brightness_to_tuya(
+                    white_bright,
+                    min_tuya=self.coordinator.brightness_min,
+                    max_tuya=self.coordinator.brightness_max,
+                )
+            if self.coordinator.dp_mode:
+                payload[self.coordinator.dp_mode] = MODE_WHITE
+
         # Handle Color (RGB)
-        if ATTR_RGB_COLOR in kwargs and self.coordinator.has_color:
+        elif ATTR_RGB_COLOR in kwargs and self.coordinator.has_color:
             rgb = kwargs[ATTR_RGB_COLOR]
             bright = kwargs.get(ATTR_BRIGHTNESS, self.brightness or 255)
             if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
                 hex_str = ha_rgb_to_tuya_hex(rgb)
+            elif self.coordinator.color_type == COLOR_TYPE_RGBHSV_HEX_14:
+                hs = ha_rgb_to_hs(rgb)
+                hex_str = ha_hs_to_tuya_hex_14(hs, brightness_ha=bright)
             else:
                 hs = ha_rgb_to_hs(rgb)
                 hex_str = ha_hs_to_tuya_hex(hs, brightness_ha=bright)
@@ -309,6 +337,8 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
             if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
                 rgb = ha_hs_to_rgb(hs, brightness_ha=bright)
                 hex_str = ha_rgb_to_tuya_hex(rgb)
+            elif self.coordinator.color_type == COLOR_TYPE_RGBHSV_HEX_14:
+                hex_str = ha_hs_to_tuya_hex_14(hs, brightness_ha=bright)
             else:
                 hex_str = ha_hs_to_tuya_hex(hs, brightness_ha=bright)
             payload[self.coordinator.dp_color] = hex_str
@@ -345,7 +375,10 @@ class TuyaLocalLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
 
             if current_tuya_mode == MODE_COLOUR and self.coordinator.has_color and self.coordinator.color_type != COLOR_TYPE_RGB_HEX_6:
                 active_hs = self.hs_color or (0.0, 0.0)
-                hex_str = ha_hs_to_tuya_hex(active_hs, brightness_ha=bright)
+                if self.coordinator.color_type == COLOR_TYPE_RGBHSV_HEX_14:
+                    hex_str = ha_hs_to_tuya_hex_14(active_hs, brightness_ha=bright)
+                else:
+                    hex_str = ha_hs_to_tuya_hex(active_hs, brightness_ha=bright)
                 payload[self.coordinator.dp_color] = hex_str
             elif self.coordinator.has_brightness:
                 payload[self.coordinator.dp_brightness] = ha_brightness_to_tuya(
@@ -529,11 +562,21 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if not self.coordinator.has_aux_color:
             return None
 
-        hex_data = str(self._get_dp(self.coordinator.dp_aux_color, ""))
+        hex_data = str(self._get_dp(self.coordinator.dp_aux_color, "")).strip()
+        if not hex_data:
+            return (0.0, 0.0) if (self.is_on and self.color_mode in (ColorMode.HS, ColorMode.RGB)) else None
+
         if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
             rgb = tuya_hex_to_ha_rgb(hex_data)
             if rgb is not None:
                 return ha_rgb_to_hs(rgb)
+            return None
+
+        if self.coordinator.color_type == COLOR_TYPE_RGBHSV_HEX_14 or len(hex_data) == 14:
+            parsed = tuya_hex_14_to_ha_hs(hex_data)
+            if parsed is not None:
+                hs, _ = parsed
+                return hs
             return None
 
         parsed = tuya_hex_to_ha_hs(hex_data)
@@ -548,8 +591,8 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
         if not self.coordinator.has_aux_color:
             return None
 
-        hex_data = str(self._get_dp(self.coordinator.dp_aux_color, ""))
-        if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
+        hex_data = str(self._get_dp(self.coordinator.dp_aux_color, "")).strip()
+        if hex_data and (self.coordinator.color_type in (COLOR_TYPE_RGB_HEX_6, COLOR_TYPE_RGBHSV_HEX_14) or len(hex_data) == 14):
             return tuya_hex_to_ha_rgb(hex_data)
 
         if self.hs_color is not None:
@@ -583,6 +626,9 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
             bright = kwargs.get(ATTR_BRIGHTNESS, self.brightness or 255)
             if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
                 hex_str = ha_rgb_to_tuya_hex(rgb)
+            elif self.coordinator.color_type == COLOR_TYPE_RGBHSV_HEX_14:
+                hs = ha_rgb_to_hs(rgb)
+                hex_str = ha_hs_to_tuya_hex_14(hs, brightness_ha=bright)
             else:
                 hs = ha_rgb_to_hs(rgb)
                 hex_str = ha_hs_to_tuya_hex(hs, brightness_ha=bright)
@@ -597,6 +643,8 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
             if self.coordinator.color_type == COLOR_TYPE_RGB_HEX_6:
                 rgb = ha_hs_to_rgb(hs, brightness_ha=bright)
                 hex_str = ha_rgb_to_tuya_hex(rgb)
+            elif self.coordinator.color_type == COLOR_TYPE_RGBHSV_HEX_14:
+                hex_str = ha_hs_to_tuya_hex_14(hs, brightness_ha=bright)
             else:
                 hex_str = ha_hs_to_tuya_hex(hs, brightness_ha=bright)
             payload[self.coordinator.dp_aux_color] = hex_str
@@ -633,7 +681,10 @@ class TuyaLocalAuxLight(CoordinatorEntity[TuyaLampCoordinator], LightEntity):
 
             if current_mode == MODE_COLOUR and self.coordinator.has_aux_color and self.coordinator.color_type != COLOR_TYPE_RGB_HEX_6:
                 active_hs = self.hs_color or (0.0, 0.0)
-                hex_str = ha_hs_to_tuya_hex(active_hs, brightness_ha=bright)
+                if self.coordinator.color_type == COLOR_TYPE_RGBHSV_HEX_14:
+                    hex_str = ha_hs_to_tuya_hex_14(active_hs, brightness_ha=bright)
+                else:
+                    hex_str = ha_hs_to_tuya_hex(active_hs, brightness_ha=bright)
                 payload[self.coordinator.dp_aux_color] = hex_str
             elif self.coordinator.has_aux_brightness:
                 payload[self.coordinator.dp_aux_brightness] = ha_brightness_to_tuya(

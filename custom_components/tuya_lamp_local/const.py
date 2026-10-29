@@ -61,8 +61,9 @@ DEFAULT_AUX_BRIGHTNESS_MAX = 1000
 
 # Color formats
 COLOR_TYPE_HSV_HEX_12 = "hsv_hex_12"
+COLOR_TYPE_RGBHSV_HEX_14 = "rgbhsv_hex_14"
 COLOR_TYPE_RGB_HEX_6 = "rgb_hex_6"
-COLOR_TYPES = [COLOR_TYPE_HSV_HEX_12, COLOR_TYPE_RGB_HEX_6]
+COLOR_TYPES = [COLOR_TYPE_HSV_HEX_12, COLOR_TYPE_RGBHSV_HEX_14, COLOR_TYPE_RGB_HEX_6]
 
 # Discovery & Import keys
 CONF_DISCOVERY_METHOD = "discovery_method"
@@ -246,56 +247,6 @@ def tuya_to_ha_kelvin(
     return int(round(min_kelvin + ratio * (max_kelvin - min_kelvin)))
 
 
-def ha_hs_to_tuya_hex(hs: tuple[float, float], brightness_ha: int = 255) -> str:
-    """Convert Home Assistant HS and brightness (1-255) to 12-char Tuya Hex (HHHHSSSSVVVV)."""
-    hue, sat = hs
-    h_int = int(round(hue)) % 360
-    s_int = int(round((sat / 100.0) * 1000.0))
-    v_int = int(round((brightness_ha / 255.0) * 1000.0))
-
-    s_int = max(0, min(1000, s_int))
-    v_int = max(10, min(1000, v_int))
-
-    return f"{h_int:04x}{s_int:04x}{v_int:04x}"
-
-
-def tuya_hex_to_ha_hs(hex_str: str) -> tuple[tuple[float, float], int] | None:
-    """Parse 12-character Tuya HSV hex string into ((hue, saturation), brightness_ha)."""
-    if not hex_str or len(hex_str) < 12:
-        return None
-    try:
-        h_val = int(hex_str[0:4], 16)
-        s_val = int(hex_str[4:8], 16)
-        v_val = int(hex_str[8:12], 16)
-
-        hue = float(h_val % 360)
-        sat = float((s_val / 1000.0) * 100.0)
-        bright_ha = int(round((v_val / 1000.0) * 255.0))
-        return ((hue, max(0.0, min(100.0, sat))), max(1, min(255, bright_ha)))
-    except (ValueError, IndexError) as err:
-        _LOGGER.warning("Could not parse Tuya HSV hex '%s': %s", hex_str, err)
-        return None
-
-
-def ha_rgb_to_tuya_hex(rgb: tuple[int, int, int]) -> str:
-    """Convert Home Assistant RGB tuple to 6-char hex string (RRGGBB)."""
-    r, g, b = rgb
-    return f"{r:02x}{g:02x}{b:02x}"
-
-
-def tuya_hex_to_ha_rgb(hex_str: str) -> tuple[int, int, int] | None:
-    """Parse 6-character hex string into RGB tuple."""
-    if not hex_str or len(hex_str) < 6:
-        return None
-    try:
-        r = int(hex_str[0:2], 16)
-        g = int(hex_str[2:4], 16)
-        b = int(hex_str[4:6], 16)
-        return (r, g, b)
-    except (ValueError, IndexError):
-        return None
-
-
 def ha_rgb_to_hs(rgb: tuple[int, int, int]) -> tuple[float, float]:
     """Convert Home Assistant RGB tuple (0-255) to HS tuple ((0-360), (0-100))."""
     r, g, b = [max(0, min(255, x)) / 255.0 for x in rgb]
@@ -311,4 +262,97 @@ def ha_hs_to_rgb(hs: tuple[float, float], brightness_ha: int = 255) -> tuple[int
     v = max(0.0, min(255.0, brightness_ha)) / 255.0
     r, g, b = colorsys.hsv_to_rgb(h, s, v)
     return (int(round(r * 255.0)), int(round(g * 255.0)), int(round(b * 255.0)))
+
+
+def ha_hs_to_tuya_hex(hs: tuple[float, float], brightness_ha: int = 255) -> str:
+    """Convert Home Assistant HS and brightness (1-255) to 12-char Tuya Hex (HHHHSSSSVVVV)."""
+    hue, sat = hs
+    h_int = int(round(hue)) % 360
+    s_int = int(round((sat / 100.0) * 1000.0))
+    v_int = int(round((brightness_ha / 255.0) * 1000.0))
+
+    s_int = max(0, min(1000, s_int))
+    v_int = max(10, min(1000, v_int))
+
+    return f"{h_int:04x}{s_int:04x}{v_int:04x}"
+
+
+def ha_hs_to_tuya_hex_14(hs: tuple[float, float], brightness_ha: int = 255) -> str:
+    """Convert Home Assistant HS and brightness (1-255) to 14-char Tuya Hex (RRGGBBHHHHSSVV)."""
+    hue, sat = hs
+    rgb = ha_hs_to_rgb(hs, brightness_ha=brightness_ha)
+    rgb_hex = f"{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+    h_int = int(round(hue)) % 360
+    s_int = int(round((max(0.0, min(100.0, sat)) / 100.0) * 255.0))
+    s_int = max(0, min(255, s_int))
+    v_int = max(1, min(255, int(round(brightness_ha))))
+    return f"{rgb_hex}{h_int:04x}{s_int:02x}{v_int:02x}"
+
+
+def tuya_hex_14_to_ha_hs(hex_str: str) -> tuple[tuple[float, float], int] | None:
+    """Parse 14-character Tuya hex string (RRGGBBHHHHSSVV) into ((hue, saturation), brightness_ha)."""
+    if not hex_str or len(hex_str.strip()) < 14:
+        return None
+    s = hex_str.strip()
+    try:
+        h_val = int(s[6:10], 16) % 360
+        s_val = int(s[10:12], 16)
+        v_val = int(s[12:14], 16)
+
+        hue = float(h_val)
+        sat = float((s_val / 255.0) * 100.0)
+        bright_ha = max(1, min(255, v_val))
+        return ((hue, max(0.0, min(100.0, sat))), bright_ha)
+    except (ValueError, IndexError) as err:
+        _LOGGER.warning("Could not parse 14-char Tuya hex '%s': %s", s, err)
+        return None
+
+
+def tuya_hex_to_ha_hs(hex_str: str) -> tuple[tuple[float, float], int] | None:
+    """Parse Tuya HSV/RGB hex string (14-char, 12-char, or 6-char) into ((hue, saturation), brightness_ha)."""
+    if not hex_str:
+        return None
+    s = str(hex_str).strip()
+    if len(s) == 14:
+        return tuya_hex_14_to_ha_hs(s)
+    if len(s) >= 12:
+        try:
+            h_val = int(s[0:4], 16)
+            s_val = int(s[4:8], 16)
+            v_val = int(s[8:12], 16)
+
+            hue = float(h_val % 360)
+            sat = float((s_val / 1000.0) * 100.0)
+            bright_ha = int(round((v_val / 1000.0) * 255.0))
+            return ((hue, max(0.0, min(100.0, sat))), max(1, min(255, bright_ha)))
+        except (ValueError, IndexError) as err:
+            _LOGGER.warning("Could not parse Tuya HSV hex '%s': %s", s, err)
+            return None
+    if len(s) >= 6:
+        rgb = tuya_hex_to_ha_rgb(s)
+        if rgb is not None:
+            return (ha_rgb_to_hs(rgb), 255)
+    return None
+
+
+def ha_rgb_to_tuya_hex(rgb: tuple[int, int, int]) -> str:
+    """Convert Home Assistant RGB tuple to 6-char hex string (RRGGBB)."""
+    r, g, b = rgb
+    return f"{r:02x}{g:02x}{b:02x}"
+
+
+def tuya_hex_to_ha_rgb(hex_str: str) -> tuple[int, int, int] | None:
+    """Parse hex string (first 6 characters as RRGGBB) into RGB tuple."""
+    if not hex_str:
+        return None
+    s = str(hex_str).strip()
+    if len(s) < 6:
+        return None
+    try:
+        r = int(s[0:2], 16)
+        g = int(s[2:4], 16)
+        b = int(s[4:6], 16)
+        return (r, g, b)
+    except (ValueError, IndexError):
+        return None
 

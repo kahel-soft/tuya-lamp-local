@@ -14,6 +14,7 @@ from .const import (
     CATEGORY_LIGHTS,
     CATEGORY_SOCKETS,
     COLOR_TYPE_HSV_HEX_12,
+    COLOR_TYPE_RGBHSV_HEX_14,
     COLOR_TYPE_RGB_HEX_6,
     CONF_AUX_BRIGHTNESS_MAX,
     CONF_AUX_BRIGHTNESS_MIN,
@@ -391,79 +392,143 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or bool(self.custom_dp_aux_power)
         )
 
-        if self.custom_dp_power and self.custom_dp_power not in (DP_MODERN_POWER, DP_MAIN_POWER):
-            self.dp_power = self.custom_dp_power
+        # Detect Legacy Type A Lamp (DP 1-5 layout)
+        # Type A lamps: Power=1, Mode=2, Brightness=3 (25-255), ColorTemp=4 (0-255), Color=5 (14-char hex)
+        is_type_a = False
+        if not is_dual_fixture:
+            if self.custom_dp_power == DP_LEGACY_POWER:
+                is_type_a = True
+            elif DP_LEGACY_POWER in dps and DP_MODERN_POWER not in dps and DP_MAIN_POWER not in dps:
+                is_type_a = True
+            elif (self.category in CATEGORY_LIGHTS) and (DP_MODERN_POWER not in dps and DP_MAIN_POWER not in dps):
+                is_type_a = True
+
+        if is_type_a:
+            self.dp_power = self.custom_dp_power or DP_LEGACY_POWER
             self.dp_master_power = None
+            self.dp_mode = self.custom_dp_mode or DP_LEGACY_MODE
+            self.dp_brightness = self.custom_dp_brightness or DP_LEGACY_BRIGHTNESS
+            self.dp_color_temp = self.custom_dp_color_temp or DP_LEGACY_COLOR_TEMP
+            self.dp_color = self.custom_dp_color or DP_LEGACY_COLOR
+
+            # For Type A lamps, default brightness range is 25 - 255 unless customized
+            if self.brightness_max == DEFAULT_BRIGHTNESS_MAX:
+                self.brightness_min = 25
+                self.brightness_max = 255
+
+            # For Type A lamps, default color temp range is 0 - 255 unless customized
+            if self.color_temp_max == DEFAULT_COLOR_TEMP_MAX:
+                self.color_temp_min = 0
+                self.color_temp_max = 255
+
+            # For Type A lamps, default color format is 14-char hex (RRGGBBHHHHSSVV)
+            if self.color_type in (COLOR_TYPE_HSV_HEX_12, "rgb8"):
+                self.color_type = COLOR_TYPE_RGBHSV_HEX_14
+
+            self.has_brightness = True
+            self.has_color_temp = True
+            self.has_color = True
+
         elif is_dual_fixture and DP_MAIN_POWER in dps:
             # Dual-source fixture: DP 101 is main light switch, DP 20 is master hardware switch
             self.dp_power = DP_MAIN_POWER
             self.dp_master_power = DP_MODERN_POWER if DP_MODERN_POWER in dps else None
-        elif DP_MODERN_POWER in dps:
-            self.dp_power = DP_MODERN_POWER
-            self.dp_master_power = None
-        elif DP_LEGACY_POWER in dps:
-            self.dp_power = DP_LEGACY_POWER
-            self.dp_master_power = None
+            self.dp_mode = self.custom_dp_mode or DP_MODERN_MODE
+            self.dp_brightness = self.custom_dp_brightness or DP_MODERN_BRIGHTNESS
+            self.dp_color_temp = self.custom_dp_color_temp or DP_MODERN_COLOR_TEMP
+            self.dp_color = self.custom_dp_color or DP_MODERN_COLOR
+            self.has_brightness = bool(self.dp_brightness in dps or self.custom_dp_brightness)
+            self.has_color_temp = bool(self.dp_color_temp in dps or self.custom_dp_color_temp)
+            self.has_color = bool(self.dp_color in dps or self.custom_dp_color)
+
         else:
-            self.dp_power = DP_MODERN_POWER
+            # Modern Type B lamp (DP 20-25)
+            self.dp_power = self.custom_dp_power or DP_MODERN_POWER
             self.dp_master_power = None
 
-        if self.custom_dp_mode:
-            self.dp_mode = self.custom_dp_mode
-        elif DP_MODERN_MODE in dps:
-            self.dp_mode = DP_MODERN_MODE
-        elif DP_LEGACY_MODE in dps:
-            self.dp_mode = DP_LEGACY_MODE
+            if self.custom_dp_mode:
+                self.dp_mode = self.custom_dp_mode
+            elif DP_MODERN_MODE in dps:
+                self.dp_mode = DP_MODERN_MODE
+            elif DP_LEGACY_MODE in dps:
+                self.dp_mode = DP_LEGACY_MODE
+            else:
+                self.dp_mode = DP_MODERN_MODE
 
-        if self.custom_dp_brightness:
-            self.dp_brightness = self.custom_dp_brightness
-        elif DP_MODERN_BRIGHTNESS in dps:
-            self.dp_brightness = DP_MODERN_BRIGHTNESS
-        elif DP_LEGACY_BRIGHTNESS in dps:
-            self.dp_brightness = DP_LEGACY_BRIGHTNESS
-            # If user didn't explicitly override brightness max, detect if legacy is 255
-            bright_val = dps.get(DP_LEGACY_BRIGHTNESS, 0)
-            if bright_val <= 255 and self.brightness_max == DEFAULT_BRIGHTNESS_MAX:
-                self.brightness_max = 255
+            if self.custom_dp_brightness:
+                self.dp_brightness = self.custom_dp_brightness
+            elif DP_MODERN_BRIGHTNESS in dps:
+                self.dp_brightness = DP_MODERN_BRIGHTNESS
+            elif DP_LEGACY_BRIGHTNESS in dps:
+                self.dp_brightness = DP_LEGACY_BRIGHTNESS
+            else:
+                self.dp_brightness = DP_MODERN_BRIGHTNESS
 
-        if self.custom_dp_color_temp:
-            self.dp_color_temp = self.custom_dp_color_temp
-        elif DP_MODERN_COLOR_TEMP in dps:
-            self.dp_color_temp = DP_MODERN_COLOR_TEMP
-        elif DP_LEGACY_COLOR_TEMP in dps:
-            self.dp_color_temp = DP_LEGACY_COLOR_TEMP
-            temp_val = dps.get(DP_LEGACY_COLOR_TEMP, 0)
-            if temp_val <= 255 and self.color_temp_max == DEFAULT_COLOR_TEMP_MAX:
-                self.color_temp_max = 255
+            if self.custom_dp_color_temp:
+                self.dp_color_temp = self.custom_dp_color_temp
+            elif DP_MODERN_COLOR_TEMP in dps:
+                self.dp_color_temp = DP_MODERN_COLOR_TEMP
+            elif DP_LEGACY_COLOR_TEMP in dps:
+                self.dp_color_temp = DP_LEGACY_COLOR_TEMP
+            else:
+                self.dp_color_temp = DP_MODERN_COLOR_TEMP
 
-        if self.custom_dp_color:
-            self.dp_color = self.custom_dp_color
-        elif DP_MODERN_COLOR in dps:
-            self.dp_color = DP_MODERN_COLOR
-        elif DP_LEGACY_COLOR in dps:
-            self.dp_color = DP_LEGACY_COLOR
+            if self.custom_dp_color:
+                self.dp_color = self.custom_dp_color
+            elif DP_MODERN_COLOR in dps:
+                self.dp_color = DP_MODERN_COLOR
+            elif DP_LEGACY_COLOR in dps:
+                self.dp_color = DP_LEGACY_COLOR
+            else:
+                self.dp_color = DP_MODERN_COLOR
 
-        self.has_brightness = bool(self.dp_brightness in dps or self.custom_dp_brightness)
-        self.has_color_temp = bool(self.dp_color_temp in dps or self.custom_dp_color_temp)
-        self.has_color = bool(self.dp_color in dps or self.custom_dp_color)
+            self.has_brightness = bool(
+                self.dp_brightness in dps
+                or self.custom_dp_brightness
+                or self.category in CATEGORY_LIGHTS
+            )
+            self.has_color_temp = bool(
+                self.dp_color_temp in dps
+                or self.custom_dp_color_temp
+                or self.category in CATEGORY_LIGHTS
+            )
+            self.has_color = bool(
+                self.dp_color in dps
+                or self.custom_dp_color
+                or self.category in CATEGORY_LIGHTS
+            )
 
         # If lamp has color (HSV) but no separate white brightness DP (e.g. floor lamps where brightness is in DP 24),
         # brightness is supported through the HSV color value
         if not self.has_brightness and self.has_color and self.color_type != COLOR_TYPE_RGB_HEX_6:
             self.has_brightness = True
 
-        # 2. Auxiliary / Secondary light detection (e.g. Sockel / Base / Aux light)
+        # 3. Auxiliary / Secondary light detection (e.g. Sockel / Base / Aux light)
         if self.custom_dp_aux_power or DP_AUX_POWER in dps:
             self.has_aux_light = True
             self.dp_aux_power = self.custom_dp_aux_power or DP_AUX_POWER
-            self.dp_aux_brightness = self.custom_dp_aux_brightness or (DP_AUX_BRIGHTNESS if DP_AUX_BRIGHTNESS in dps else None)
-            self.dp_aux_color = self.custom_dp_aux_color or (DP_AUX_COLOR if DP_AUX_COLOR in dps else None)
-            self.dp_aux_mode = self.custom_dp_aux_mode or (DP_AUX_MODE if DP_AUX_MODE in dps else None)
-            self.dp_aux_color_temp = self.custom_dp_aux_color_temp or (DP_AUX_COLOR_TEMP if DP_AUX_COLOR_TEMP in dps else None)
+            self.dp_aux_brightness = self.custom_dp_aux_brightness or DP_AUX_BRIGHTNESS
+            self.dp_aux_color = self.custom_dp_aux_color or DP_AUX_COLOR
+            self.dp_aux_mode = self.custom_dp_aux_mode or DP_AUX_MODE
+            self.dp_aux_color_temp = self.custom_dp_aux_color_temp or DP_AUX_COLOR_TEMP
 
-            self.has_aux_brightness = bool(self.dp_aux_brightness and (self.dp_aux_brightness in dps or self.custom_dp_aux_brightness))
-            self.has_aux_color = bool(self.dp_aux_color and (self.dp_aux_color in dps or self.custom_dp_aux_color))
-            self.has_aux_color_temp = bool(self.dp_aux_color_temp and (self.dp_aux_color_temp in dps or self.custom_dp_aux_color_temp))
+            self.has_aux_brightness = bool(
+                self.custom_dp_aux_brightness
+                or (self.dp_aux_brightness and self.dp_aux_brightness in dps)
+                or DP_AUX_BRIGHTNESS in dps
+                or True
+            )
+            self.has_aux_color = bool(
+                self.custom_dp_color
+                or (self.dp_aux_color and self.dp_aux_color in dps)
+                or DP_AUX_COLOR in dps
+                or True
+            )
+            self.has_aux_color_temp = bool(
+                self.custom_dp_aux_color_temp
+                or (self.dp_aux_color_temp and self.dp_aux_color_temp in dps)
+                or DP_AUX_COLOR_TEMP in dps
+            )
 
             if not self.has_aux_brightness and self.has_aux_color:
                 self.has_aux_brightness = True
@@ -515,7 +580,15 @@ class TuyaLampCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 raise UpdateFailed(f"Error communicating with Tuya lamp ({self.host}): {err}") from err
 
             dps = data.get("dps", {})
-            if dps:
+            if isinstance(dps, dict):
+                # Preserve previously known DPs if new response is a delta or partial status
+                # (essential for Type A legacy lamps which only report DP 1 in standby)
+                if self.data and isinstance(self.data.get("dps"), dict):
+                    merged_dps = dict(self.data["dps"])
+                    merged_dps.update(dps)
+                    data["dps"] = merged_dps
+                    dps = merged_dps
+
                 if not self._initialized or (DP_AUX_POWER in dps and not self.has_aux_light):
                     self._detect_datapoint_layout(dps)
 
